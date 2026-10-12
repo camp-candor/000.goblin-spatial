@@ -283,7 +283,7 @@ test.serial('scanFleet [NEG_CONTROL] -- normalizes messy pivot inputs with brack
 test.serial('scanFleet [NEG_CONTROL] -- returns empty list cleanly when target pivot does not exist', async (t) => {
     const mockFleetRoot = path.resolve(process.cwd(), 'scratch_test_empty_pivot')
     const repoA = path.join(mockFleetRoot, 'campc-it-com', '000.repo-bot')
-    await fs.ensureDir(path.join(repoA, 'packages', '000.agent'))
+    await fs.ensureDir(path.join(repoA, 'packages', '100.agent'))
     await fs.writeFile(path.join(repoA, 'package.json'), '{"name":"repo-bot"}')
 
     t.teardown(async () => {
