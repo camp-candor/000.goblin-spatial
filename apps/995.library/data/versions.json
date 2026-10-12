@@ -9,9 +9,9 @@
     "133.cloudflare": "0.1.4"
   },
   "repositories": {
-    "000.agent": {
+    "100.agent": {
       "cluster": "00.governance",
-      "path": "packages/000.agent",
+      "path": "packages/100.agent",
       "pinned_sha": "7bd4e10a8b9c2d3e4f5a6b7c8d9e0f1a2b3c4d5e",
       "required_contract_version": "0.1.0",
       "expected_branch": "main",

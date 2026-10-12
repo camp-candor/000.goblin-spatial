@@ -151,7 +151,7 @@ test('terminal telemetry -- updateConsole logs lines directly into cns00 widget 
     const slv = sinon.fake()
     const bal = {
         idx: 'cns00',
-        src: '>> [OK] Mounted UI Pivot: [000.agent] -> AGENT MENU',
+        src: '>> [OK] Mounted UI Pivot: [100.agent] -> AGENT MENU',
         slv,
     } as any
 
@@ -165,7 +165,7 @@ test('terminal telemetry -- updateConsole logs lines directly into cns00 widget 
     t.is(loggedLines.length, 1, 'Exactly one line must be logged to the cns00 widget')
     t.is(
         loggedLines[0],
-        '>> [OK] Mounted UI Pivot: [000.agent] -> AGENT MENU',
+        '>> [OK] Mounted UI Pivot: [100.agent] -> AGENT MENU',
         'Logged message must match input telemetry',
     )
     t.is(stdoutSpy.callCount, 0, 'No raw output must leak to process.stdout')
@@ -195,7 +195,7 @@ test('terminal telemetry -- dispatches UI and headless pivot telemetry to cns00 
 
     await LIBRARY.hunt(CONSOLE_ACTION_LIBRARY.UPDATE_CONSOLE, {
         idx: 'cns00',
-        src: '>> [OK] Mounted UI Pivot: [000.agent] -> AGENT MENU',
+        src: '>> [OK] Mounted UI Pivot: [100.agent] -> AGENT MENU',
     })
 
     await LIBRARY.hunt(CONSOLE_ACTION_LIBRARY.UPDATE_CONSOLE, {
@@ -220,7 +220,7 @@ test('terminal telemetry -- dispatches UI and headless pivot telemetry to cns00 
     }
 
     t.is(dispatchedBales[0].src, '>> [OK] Master Bus Initialized')
-    t.is(dispatchedBales[1].src, '>> [OK] Mounted UI Pivot: [000.agent] -> AGENT MENU')
+    t.is(dispatchedBales[1].src, '>> [OK] Mounted UI Pivot: [100.agent] -> AGENT MENU')
     t.is(dispatchedBales[2].src, '>> [INFO] Mounted headless pivot: [999.headless] as global.HEADLESS')
     t.is(dispatchedBales[3].src, ':: [WARN] Skipping pivot [888.corrupt]: syntax error')
 })

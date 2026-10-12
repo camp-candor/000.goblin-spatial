@@ -9,7 +9,7 @@ Response: npm-agent-01 establishes a dual-plane architecture: an edge-native Clo
 ## **1\. Core Architecture & Current Baseline**
 
 > * **Edge Control Plane (apps/worker):** Built with Hono and @funtuantw/pi-agent-cf, binding AgentSessionDO as a stateful, single-threaded Durable Object coordinator with Cloudflare AI Gateway routing.  
-> * **Terminal Switchboard (packages/000.agent):** Manages process spawning and dynamically toggles the active base URL between local Miniflare (\[http://127.0.0.1:8787\](http://127.0.0.1:8787)) and live Cloudflare edge deployments.  
+> * **Terminal Switchboard (packages/100.agent):** Manages process spawning and dynamically toggles the active base URL between local Miniflare (\[http://127.0.0.1:8787\](http://127.0.0.1:8787)) and live Cloudflare edge deployments.
 > * **Immutable Runner Boundary (apps/995.library):** Blessed Curses TUI environment where only run.ts is modifiable for package discovery, keeping base grid and console primitives fully isolated.  
 > * **Workspace Topology:** Standard NPM Monorepo (workspaces: \["packages/\*", "apps/\*"\]) strictly banning multi-package managers (Nx, Lerna, Yarn, PNPM) while enforcing pure ESM and strict TypeScript.
 
@@ -246,7 +246,7 @@ Add an explicit ownership matrix to AGENTS.md to define immutability contracts f
 | apps/worker/src/index.ts | **Upstream Edge Router** | **NO** | **Zero** |
 | apps/worker/src/tools.core.ts | **Upstream Git Tools** | **NO** | **Zero** |
 | apps/worker/src/tools.custom.ts | **Downstream Extensions** | **YES** | Protected via .gitattributes |
-| packages/000.agent/ | **Upstream Baseline** | **NO** (use as reference) | **Low** |
+| packages/100.agent/ | **Upstream Baseline** | **NO** (use as reference) | **Low** |
 | packages/\<new-domain\>/ | **Downstream User-Space** | **YES (Unrestricted)** | **Zero** (file path does not exist upstream) |
 
 ---
@@ -545,7 +545,7 @@ Here is the extreme, nuanced breakdown of how this ownership matrix dictates the
 
 ### **V. The Upstream Domain Baseline (Reference Packages)**
 
-**Targets:** packages/000.agent, packages/821.repobot, packages/132.github. **Ownership:** Upstream Baseline. **Downstream Modification:** NO (Use as reference).
+**Targets:** packages/100.agent, packages/821.repobot, packages/132.github. **Ownership:** Upstream Baseline. **Downstream Modification:** NO (Use as reference).
 
 > * **The Structural Law:** These packages contain the fundamental state machines, fleet CI health monitors, and the "Target Switchboard" (Local/Live toggle).  
 > * **The Nuance of Cloning:** While marked "YES" for modifiability in broad strokes, treating them as Upstream-owned prevents synchronization pain. If a downstream team needs a radically different Repobot FSM, they should not edit packages/821.repobot; instead, they should duplicate it into packages/999.custom-bot and mount it via run.ts. This preserves the baseline packages for upstream updates while granting downstream total architectural freedom.
@@ -708,7 +708,7 @@ Both core and custom tools must validate arguments using @sinclair/typebox schem
 
 The extension boundary enforces credential isolation across the architecture:
 
-> * **No Secret Leakage to the Terminal:** Sensitive tokens (e.g., GITHUB\_TOKEN, admin API keys) remain encrypted inside Cloudflare's runtime isolate (.dev.vars locally or Wrangler secrets in production). The Blessed terminal client (packages/000.agent / packages/132.github) interacts with tools via loopback HTTP requests (\[http://127.0.0.1:8787\](http://127.0.0.1:8787)) without ever handling raw secrets.  
+> * **No Secret Leakage to the Terminal:** Sensitive tokens (e.g., GITHUB\_TOKEN, admin API keys) remain encrypted inside Cloudflare's runtime isolate (.dev.vars locally or Wrangler secrets in production). The Blessed terminal client (packages/100.agent / packages/132.github) interacts with tools via loopback HTTP requests (\[http://127.0.0.1:8787\](http://127.0.0.1:8787)) without ever handling raw secrets.
 > * **Protection Against Untrusted Downstream Logic:** Custom tools run within the sandboxed Cloudflare Worker isolate. They cannot access host workstation filesystems, execute unauthorized POSIX binaries, or bypass the edge worker's runtime policies.
 
 ---
@@ -2510,14 +2510,14 @@ To maintain low startup latency and stay comfortably within the 128 MB RAM isola
 
 *User prompt: {{FOCUS : 1\. The Dynamic Target Switchboard & Precedence Cascade}} /extreme-details*
 
-Response: The **Dynamic Target Switchboard and Precedence Cascade** in packages/000.agent serves as the runtime network traffic controller for npm-agent-01, enabling the local Blessed Curses terminal harness to alternate dynamically between local simulation isolates and remote Cloudflare Worker deployments without restarting the host Node.js process.
+Response: The **Dynamic Target Switchboard and Precedence Cascade** in packages/100.agent serves as the runtime network traffic controller for npm-agent-01, enabling the local Blessed Curses terminal harness to alternate dynamically between local simulation isolates and remote Cloudflare Worker deployments without restarting the host Node.js process.
 
 ### **1\. Structural Architecture & The Runtime State Model**
 
-The switchboard architecture decouples operational intent in the terminal flight deck from network transport. Rather than hardcoding target URLs inside client modules, the system governs network targets through a centralized, Redux-style buzzer unit housed within packages/000.agent/98.menu.unit.
+The switchboard architecture decouples operational intent in the terminal flight deck from network transport. Rather than hardcoding target URLs inside client modules, the system governs network targets through a centralized, Redux-style buzzer unit housed within packages/100.agent/98.menu.unit.
 
 ┌────────────────────────────────────────────────────────────────────────┐  
-│               BLESSED TUI COCKPIT (packages/000.agent)                  │  
+│               BLESSED TUI COCKPIT (packages/100.agent)                  │
 │                                                                        │  
 │  State Model (menu.model.ts):                                          │  
 │  • targetMode: 'LIVE' | 'LOCAL'                                        │  
@@ -2547,7 +2547,7 @@ The switchboard architecture decouples operational intent in the terminal flight
                                     │  
                                     ▼  
 ┌────────────────────────────────────────────────────────────────────────┐  
-│           DOWNSTREAM DISPATCH UNITS (132.github, 000.agent)            │  
+│           DOWNSTREAM DISPATCH UNITS (132.github, 100.agent)            │
 │                                                                        │  
 │  Invoke getBaseUrl() dynamically at moment of fetch():                 │  
 │  \-\> Routes immediately to the active target with zero restart latency   │  
@@ -2561,7 +2561,7 @@ The target switchboard maintains state inside MenuModel, preserving tracking par
 > * **activeBaseUrl:** A sanitized HTTP root string resolved at boot time via getLiveUrl().  
 > * **localProcess:** A nullable handle (any / ChildProcess | null) referencing the spawned background Wrangler daemon.
 
-// packages/000.agent/98.menu.unit/menu.model.ts  
+// packages/100.agent/98.menu.unit/menu.model.ts
 import Menu from './fce/menu.interface.js';
 
 const resolvedLiveUrl \= (  
@@ -2619,9 +2619,9 @@ A critical architectural failure in distributed client tooling is caching destin
 
 ### **3\. Subprocess Spawning, Readiness Probing, & Platform Lifecycle**
 
-The toggleTargetMode buzzer function in packages/000.agent/98.menu.unit/buz/00.menu.buzz.ts manages the lifecycle of the local Cloudflare Worker environment.
+The toggleTargetMode buzzer function in packages/100.agent/98.menu.unit/buz/00.menu.buzz.ts manages the lifecycle of the local Cloudflare Worker environment.
 
-// packages/000.agent/98.menu.unit/buz/00.menu.buzz.ts  
+// packages/100.agent/98.menu.unit/buz/00.menu.buzz.ts
 export const toggleTargetMode \= async (  
     cpy: MenuModel,  
     bal: MenuBit,  
@@ -2751,7 +2751,7 @@ export const toggleTargetMode \= async (
 
 #### **1\. Upward Path Discovery Failsafes**
 
-The runner can be invoked from monorepo sub-paths (e.g., apps/995.library, packages/000.agent, or repository root). To locate the target Worker directory without hardcoded absolute paths, the switchboard traverses parent directories upwards using resolveWorkerDir() and resolveRootEnv() until it confirms the presence of apps/worker and .env.
+The runner can be invoked from monorepo sub-paths (e.g., apps/995.library, packages/100.agent, or repository root). To locate the target Worker directory without hardcoded absolute paths, the switchboard traverses parent directories upwards using resolveWorkerDir() and resolveRootEnv() until it confirms the presence of apps/worker and .env.
 
 export const resolveWorkerDir \= (): string \=\> {  
     let curr \= process.cwd();  
@@ -2795,9 +2795,9 @@ The target switchboard synchronizes both stateless HTTP request pipelines and pe
   HTTP: http://127.0.0.1:8787     HTTP: https://...workers.dev  
   WS:   ws://localhost:8787/ws    WS:   wss://...workers.dev/ws
 
-In packages/000.agent/00.agent.unit/buz/agent.buzz.ts, the WebSocket connector verifies the active target mode prior to opening transport sockets:
+In packages/100.agent/00.agent.unit/buz/agent.buzz.ts, the WebSocket connector verifies the active target mode prior to opening transport sockets:
 
-// packages/000.agent/00.agent.unit/buz/agent.buzz.ts  
+// packages/100.agent/00.agent.unit/buz/agent.buzz.ts
 export const connectagent \= (cpy: AgentModel, bal: agentBit, ste: State) \=\> {  
     const isLocal \= bal.src \=== 'LOCAL';  
     const wsUrl \= isLocal  
@@ -2857,7 +2857,7 @@ When the target switchboard triggers a mode change, disconnectagent terminates o
 
 ### **5\. UI Presentation & Diagnostic Telemetry Pipeline**
 
-The user interface in packages/000.agent/98.menu.unit/buz/00.menu.buzz.ts exposes the switchboard status directly inside the Blessed choice menu:
+The user interface in packages/100.agent/98.menu.unit/buz/00.menu.buzz.ts exposes the switchboard status directly inside the Blessed choice menu:
 
 export const updateMenu \= async (cpy: MenuModel, bal: MenuBit, ste: State) \=\> {  
     const toggleLabel \=  
@@ -2952,7 +2952,7 @@ Downstream consumer packages import and leverage the switchboard without maintai
 #### **Downstream Dispatch Pattern**
 
 // packages/821.repobot/src/auditBridge.ts  
-import { getBaseUrl } from '../../000.agent/98.menu.unit/buz/00.menu.buzz.js';
+import { getBaseUrl } from '../../100.agent/98.menu.unit/buz/00.menu.buzz.js';
 
 export async function dispatchAudit(owner: string, repo: string) {  
     const root \= getBaseUrl();  
@@ -2967,13 +2967,13 @@ export async function dispatchAudit(owner: string, repo: string) {
 
 #### **Automated Unit & Integration Testing**
 
-The target switchboard contract is verified by automated test suites in packages/000.agent/00.agent.unit/menu.toggle.test.ts:
+The target switchboard contract is verified by automated test suites in packages/100.agent/00.agent.unit/menu.toggle.test.ts:
 
 > * **Initial State Assertions:** Confirms that MenuModel boots in LIVE mode, anchors to a valid URL string, and leaves localProcess set to null.  
 > * **Action Definition Integrity:** Validates that ToggleTargetMode registers under the action type \[Menu action\] Toggle Target Mode.  
 > * **Filesystem Resolution Integrity:** Proves that resolveWorkerDir() resolves an absolute path containing a valid package.json.
 
-// packages/000.agent/00.agent.unit/menu.toggle.test.ts  
+// packages/100.agent/00.agent.unit/menu.toggle.test.ts
 import fs from 'fs';  
 import { describe, it, expect } from 'vitest';  
 import { MenuModel } from '../98.menu.unit/menu.model.js';  
@@ -3006,7 +3006,7 @@ By combining upward path discovery, child process supervision, readiness health 
 
 *User prompt: {{FOCUS : The 4-Tier Resolution Cascade}} /extreme-details*
 
-Response: The **4-Tier Resolution Cascade** is the deterministic network routing engine of npm-agent-01, governing how client-side cockpit packages (packages/000.agent, packages/821.repobot, packages/132.github) and the Blessed terminal runner (apps/995.library) resolve outbound HTTP and WebSocket endpoints to the Cloudflare Worker control plane.
+Response: The **4-Tier Resolution Cascade** is the deterministic network routing engine of npm-agent-01, governing how client-side cockpit packages (packages/100.agent, packages/821.repobot, packages/132.github) and the Blessed terminal runner (apps/995.library) resolve outbound HTTP and WebSocket endpoints to the Cloudflare Worker control plane.
 
 In a distributed monorepo supporting both local workerd emulation (Miniflare on \[http://127.0.0.1:8787\](http://127.0.0.1:8787)) and live Cloudflare edge deployments (\[https://...workers.dev\](https://...workers.dev)), hardcoded endpoints or module-level environment caching cause catastrophic routing failures: stale closures, orphaned connections, and accidental execution of live cloud mutations during local development.
 
@@ -3060,7 +3060,7 @@ Outbound Request Dispatch (T\_dispatch)
 #### **Tier 1: The Global Runtime Pointer ((global as any).agentBaseUrl)**
 
 > * **Mechanism:** Represents active process memory bound to the Node.js global object.  
-> * **Operational Flow:** When an operator in the Blessed TUI (packages/000.agent/98.menu.unit) navigates to the choice list and activates TOGGLE\_TARGET\_MODE, the buzzer routine (toggleTargetMode in 00.menu.buzz.ts) directly writes the target URL into (global as any).agentBaseUrl:  
+> * **Operational Flow:** When an operator in the Blessed TUI (packages/100.agent/98.menu.unit) navigates to the choice list and activates TOGGLE\_TARGET\_MODE, the buzzer routine (toggleTargetMode in 00.menu.buzz.ts) directly writes the target URL into (global as any).agentBaseUrl:
   * When switching to **LOCAL**: Spawns npx wrangler dev \--port 8787, verifies GET \[http://127.0.0.1:8787/health\](http://127.0.0.1:8787/health), and commits (global as any).agentBaseUrl \= '\[http://127.0.0.1:8787\](http://127.0.0.1:8787)'.  
   * When switching to **LIVE**: Kills local child processes, cleans port 8787, and commits (global as any).agentBaseUrl \= '\[https://repo-bot-00.berad4000.workers.dev\](https://repo-bot-00.berad4000.workers.dev)'.  
 > * **Precedence Dominance:** Because Tier 1 is checked first, an interactive choice instantly overrides any environment variables set in .env or CI without requiring a terminal restart.
@@ -3150,7 +3150,7 @@ When running tools within an NPM monorepo (workspaces: \["packages/\*", "apps/\*
 
 To ensure Tier 3 (process.env.\*) resolves correctly, the switchboard implements **Upward Path Traversal** to find the root .env file rather than assuming it exists in the current working directory:
 
-// packages/000.agent/98.menu.unit/buz/00.menu.buzz.ts  
+// packages/100.agent/98.menu.unit/buz/00.menu.buzz.ts
 import fs from 'fs';  
 import path from 'path';  
 import dotenv from 'dotenv';
@@ -3178,7 +3178,7 @@ if (rootEnvPath) {
 
 This production-grade reference implementation encapsulates the 4-Tier Resolution Cascade, protocol mapping, URL sanitization, and diagnostic telemetry for npm-agent-01:
 
-// packages/000.agent/src/cascade.ts  
+// packages/100.agent/src/cascade.ts
 import fs from 'fs';  
 import path from 'path';  
 import dotenv from 'dotenv';
@@ -3254,7 +3254,7 @@ export const getResolutionTelemetry \= () \=\> {
 
 The unit test suite below verifies that the 4-Tier Resolution Cascade adheres to strict fallback ordering, sanitizes whitespace/slashes, and maps protocols without state leakage:
 
-// packages/000.agent/test/cascade.test.ts  
+// packages/100.agent/test/cascade.test.ts
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';  
 import { getBaseUrl, getBaseWsUrl, CANONICAL\_FALLBACK\_URL } from '../src/cascade.js';
 
@@ -4228,7 +4228,7 @@ Because npm-agent-01 serves as an upstream template and orchestration engine for
         ┌───────────────────────┼───────────────────────┐  
         ▼                       ▼                       ▼  
 ┌────────────────┐      ┌────────────────┐      ┌────────────────┐  
-│  000.agent-01  │      │ 001.goblin-lore│      │ 002.viewport   │  
+│  100.agent-01  │      │ 001.goblin-lore│      │ 002.viewport   │
 │  Commit: 7bd4e │      │ Commit: 9c3e4  │      │ Commit: 4f8a1  │  
 └────────────────┘      └────────────────┘      └────────────────┘  
         │                       │                       │  
@@ -4310,14 +4310,14 @@ By embedding these invariants directly into the root build system, npm-agent-01 
 
 *User prompt: so take a look at the beginning of this conversation and create a summary of all the most important information until the last response and make sure the material is all about npm agent*
 
-Response: npm-agent-01 is designed as a foundational boilerplate repository for projects that require Cloudflare Durable Objects, edge-native execution, and deterministic LLM tool calling. It establishes a dual-plane architecture: an edge isolate control plane in apps/worker and a local Blessed Curses terminal flight deck in apps/995.library and packages/000.agent.
+Response: npm-agent-01 is designed as a foundational boilerplate repository for projects that require Cloudflare Durable Objects, edge-native execution, and deterministic LLM tool calling. It establishes a dual-plane architecture: an edge isolate control plane in apps/worker and a local Blessed Curses terminal flight deck in apps/995.library and packages/100.agent.
 
 Below is the comprehensive technical synthesis of all architectural agreements, invariant specifications, and design patterns established for the repository.
 
 ### **1\. Dual-Plane Architecture & Boilerplate Scrubbing**
 
 > * **The Edge Control Plane (apps/worker):** An edge isolate built on Hono and @funtuantw/pi-agent-cf (transitioning to native REST and Durable Object actors like RepoBotDO), backed by Cloudflare AI Gateway for edge inference and rate-limiting.  
-> * **The Terminal Cockpit (apps/995.library & packages/000.agent):** Blessed Curses TUI environment where apps/995.library/995.library/\*\* is strictly immutable. Only apps/995.library/run.ts is modifiable for package discovery and menu orchestration, while all agent business logic and state reducers reside in packages/000.agent.  
+> * **The Terminal Cockpit (apps/995.library & packages/100.agent):** Blessed Curses TUI environment where apps/995.library/995.library/\*\* is strictly immutable. Only apps/995.library/run.ts is modifiable for package discovery and menu orchestration, while all agent business logic and state reducers reside in packages/100.agent.
 > * **Scrubbing Public Monorepo Baggage:** Because npm-agent-01 serves as a private, single-tenant edge agent rather than an open-source library distributed to public registries, all release and publishing machinery is purged:  
   * Remove .changeset/, changeset-branch.sh, nx.json, and commitlint configurations.  
   * Remove api-extractor.json, typedoc.json, and Vite/Rollup dual ESM/CJS build pipelines.  
@@ -4391,7 +4391,7 @@ To enable downstream repositories to pull updates from upstream/main without cod
 
 ### **4\. Advanced Edge Control Plane & Target Switching**
 
-> * **The Dynamic Target Switchboard:** Housed in packages/000.agent/98.menu.unit, this subsystem allows developers to hot-swap between local Miniflare simulation (\[http://127.0.0.1:8787\](http://127.0.0.1:8787)) and live Cloudflare edge workers directly within the Blessed HUD.  
+> * **The Dynamic Target Switchboard:** Housed in packages/100.agent/98.menu.unit, this subsystem allows developers to hot-swap between local Miniflare simulation (\[http://127.0.0.1:8787\](http://127.0.0.1:8787)) and live Cloudflare edge workers directly within the Blessed HUD.
   * Selecting TARGET: \[LIVE\] \-\> Switch to LOCAL spawns npx wrangler dev \--port 8787, polls /health for up to 15 seconds, and updates (global as any).agentBaseUrl.  
   * Switching back to LIVE terminates the background child process (taskkill on Windows, SIGTERM on POSIX) and restores the live endpoint.  
 > * **The 4-Tier Resolution Cascade (getBaseUrl()):** Outbound HTTP and WebSocket requests evaluate target endpoints dynamically at the moment of fetch() dispatch:  
