@@ -74,7 +74,18 @@ export const fleetMenu = async (cpy: MenuModel, bal: MenuBit, ste: State) => {
 
             const confirmGrid = await ste.hunt(ActGrd.UPDATE_GRID, { x: 0, y: 4, xSpan: 4, ySpan: 4 });
             const confirmChoice = await ste.hunt(ActChc.OPEN_CHOICE, {
-                dat: { clr0: Color.BLACK, clr1: Color.RED },
+                dat: {
+                    clr0: Color.BLACK,
+                    clr1: Color.YELLOW,
+                    cb: (choice: string) => {
+                        ste.hunt(ActCns.UPDATE_CONSOLE, {
+                            idx: 'cns00',
+                            src: choice.startsWith('[YES]')
+                                ? `>> [CONFIRM] Broadcast to ${targets.length} repositories.`
+                                : '>> [ABORT] Cancel broadcast.',
+                        });
+                    },
+                },
                 src: Align.VERTICAL,
                 lst: ['[NO]  CANCEL BROADCAST', `[YES] BROADCAST TO ${targets.length} REPOSITORIES`],
                 net: confirmGrid.grdBit.dat,

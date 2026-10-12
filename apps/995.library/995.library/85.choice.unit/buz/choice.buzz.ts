@@ -65,6 +65,10 @@ export const openChoice = (cpy: ChoiceModel, bal: ChoiceBit, ste: State) => {
     const itemList: string[] = bal?.lst || []
 
     itemList.forEach((itemText: string, index: number) => {
+        const isRedTheme = dat.clr1 === Color.RED || dat.clr1 === 'red'
+        const focusBg = isRedTheme ? Color.YELLOW : 'red'
+        const focusFg = isRedTheme ? 'black' : 'white'
+
         const btn = blessed.button({
             parent: form,
             mouse: true,
@@ -83,10 +87,12 @@ export const openChoice = (cpy: ChoiceModel, bal: ChoiceBit, ste: State) => {
             style: {
                 bg: dat.clr1,
                 focus: {
-                    bg: 'red',
+                    bg: focusBg,
+                    fg: focusFg,
                 },
                 hover: {
-                    bg: 'red',
+                    bg: focusBg,
+                    fg: focusFg,
                 },
             },
         })
@@ -106,11 +112,21 @@ export const openChoice = (cpy: ChoiceModel, bal: ChoiceBit, ste: State) => {
     })
 
     // Vertical keyboard navigation mappings (Up/Down + Vim k/j)
-    const handleUp = () => form.focusPrevious()
-    const handleDown = () => form.focusNext()
+    const handleUp = () => {
+        form.focusPrevious()
+        screen.render()
+    }
+    const handleDown = () => {
+        form.focusNext()
+        screen.render()
+    }
+    const handleSubmit = () => {
+        form.submit()
+    }
 
     screen.key(['up', 'k'], handleUp)
     screen.key(['down', 'j'], handleDown)
+    screen.key(['enter', 'return'], handleSubmit)
 
     let cleanedUp = false
     const cleanup = () => {
@@ -120,6 +136,7 @@ export const openChoice = (cpy: ChoiceModel, bal: ChoiceBit, ste: State) => {
         // 1. Explicitly unbind all registered directional navigation keys
         screen.unkey(['up', 'k'], handleUp)
         screen.unkey(['down', 'j'], handleDown)
+        screen.unkey(['enter', 'return'], handleSubmit)
 
         // 2. Detach and destroy widget subtree to liberate terminal memory
         form.destroy()

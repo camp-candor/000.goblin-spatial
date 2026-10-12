@@ -685,7 +685,7 @@ export const flatLibrary = async (
     const fs = require('fs-extra')
     const path = require('path')
 
-    // Resolve repository root directory
+    // 1. Resolve repository root directory
     const isRepoRoot = (dir: string) => {
         try {
             return (
@@ -722,18 +722,21 @@ export const flatLibrary = async (
     const outputDir = path.join(repoRoot, 'data', 'flat')
     const outputFile = path.join(outputDir, `${timestamp}.txt`)
 
-    if (ste)
+    if (ste) {
         await ste.hunt(ActCns.UPDATE_CONSOLE, {
             idx: 'cns00',
-            src: 'Starting Flat Library...',
+            src: '>> [FLAT] Starting Flat Library distillation...',
         })
+    }
 
+    // Include .astro in IGNORED_DIRS so internal build caches are never parsed
     const IGNORED_DIRS = new Set([
         'node_modules',
         'dist',
         'data',
         '.git',
         '.wrangler',
+        '.astro',
     ])
     const CODE_EXTS = new Set([
         '.ts',
@@ -753,6 +756,24 @@ export const flatLibrary = async (
         'AGENT_INSTRUCTIONS.md',
     ])
 
+    // Non-text binaries excluded from flat text ledgers
+    const BINARY_EXTS = new Set([
+        '.png',
+        '.jpg',
+        '.jpeg',
+        '.gif',
+        '.webp',
+        '.ico',
+        '.woff',
+        '.woff2',
+        '.ttf',
+        '.eot',
+        '.mp4',
+        '.mp3',
+        '.pdf',
+        '.zip',
+    ])
+
     async function getFilePaths(dir: string): Promise<string[]> {
         let entries
         try {
@@ -764,14 +785,12 @@ export const flatLibrary = async (
         const filePaths: string[] = []
         for (const entry of entries) {
             if (entry.isDirectory()) {
-                // Skip ignored directories, but allow any directory named "schema"
                 if (IGNORED_DIRS.has(entry.name) && entry.name !== 'schema') {
                     continue
                 }
                 const subFiles = await getFilePaths(path.join(dir, entry.name))
                 filePaths.push(...subFiles)
             } else if (entry.isFile()) {
-                // Exclude README.md
                 if (entry.name.toLowerCase() === 'readme.md') {
                     continue
                 }
@@ -780,6 +799,74 @@ export const flatLibrary = async (
         }
 
         return filePaths
+    }
+
+    // =========================================================================
+    // FEATURE: ASTRO SURFACE INGESTION (ASTRO_SURFACE_HARVEST)
+    // Discovers any apps/* workspaces containing a .astro directory and
+    // extracts their complete src/ tree, strictly excluding .env files.
+    // =========================================================================
+    async function getAstroWorkspaceSrcFiles(appsRoot: string): Promise<string[]> {
+        if (!fs.existsSync(appsRoot)) return []
+        const harvestedFiles: string[] = []
+
+        try {
+            const appEntries = await fs.readdir(appsRoot, { withFileTypes: true })
+
+            for (const appEntry of appEntries) {
+                if (!appEntry.isDirectory()) continue
+                const appDir = path.join(appsRoot, appEntry.name)
+                const astroSentinel = path.join(appDir, '.astro')
+
+                if (fs.existsSync(astroSentinel)) {
+                    const srcDir = path.join(appDir, 'src')
+                    if (!fs.existsSync(srcDir)) continue
+
+                    if (ste) {
+                        await ste.hunt(ActCns.UPDATE_CONSOLE, {
+                            idx: 'cns00',
+                            src: `>> [ASTRO] Detected Astro workspace in apps/${appEntry.name}. Harvesting src/...`,
+                        })
+                    }
+
+                    const harvestSrcRecursively = async (currentDir: string): Promise<void> => {
+                        const entries = await fs.readdir(currentDir, { withFileTypes: true })
+                        for (const entry of entries) {
+                            const fullPath = path.join(currentDir, entry.name)
+
+                            if (entry.isDirectory()) {
+                                if (IGNORED_DIRS.has(entry.name)) continue
+                                await harvestSrcRecursively(fullPath)
+                            } else if (entry.isFile()) {
+                                const base = entry.name.toLowerCase()
+                                const ext = path.extname(entry.name).toLowerCase()
+
+                                // Strict secret quarantine: purge .env, .env.*, and .dev.vars
+                                if (base === '.env' || base.startsWith('.env.') || base.startsWith('.dev.vars')) {
+                                    continue
+                                }
+                                if (BINARY_EXTS.has(ext)) {
+                                    continue
+                                }
+
+                                harvestedFiles.push(fullPath)
+                            }
+                        }
+                    }
+
+                    await harvestSrcRecursively(srcDir)
+                }
+            }
+        } catch (err: any) {
+            if (ste) {
+                await ste.hunt(ActCns.UPDATE_CONSOLE, {
+                    idx: 'cns00',
+                    src: `>> [ASTRO:WARN] Astro harvest error: ${err.message}`,
+                })
+            }
+        }
+
+        return harvestedFiles
     }
 
     try {
@@ -792,7 +879,6 @@ export const flatLibrary = async (
             if (!fs.existsSync(targetRoot)) continue
 
             if (targetRoot === repoRoot) {
-                // Special case for root to avoid scanning everything again
                 const subEntries = await fs.readdir(targetRoot, {
                     withFileTypes: true,
                 })
@@ -802,7 +888,6 @@ export const flatLibrary = async (
                     }
                 }
             } else if (path.basename(targetRoot) === '.github') {
-                // Specifically scan .github
                 const files = await getFilePaths(targetRoot)
                 allScannedFiles.push(...files)
             } else {
@@ -820,8 +905,8 @@ export const flatLibrary = async (
             }
         }
 
-        // Filter for code files
-        const codeFiles = allScannedFiles.filter((file) => {
+        // Standard code file filter
+        const standardCodeFiles = allScannedFiles.filter((file) => {
             const ext = path.extname(file)
             const filename = path.basename(file)
 
@@ -829,7 +914,6 @@ export const flatLibrary = async (
                 ALLOWED_FILES.has(filename) || filename.startsWith('tsconfig')
 
             if (!CODE_EXTS.has(ext) && !isAllowedFile) return false
-            // If it's a JS file and a corresponding TS file exists in the same folder, skip the compiled duplicate
             if (ext === '.js') {
                 const tsSibling = file.slice(0, -3) + '.ts'
                 if (fs.existsSync(tsSibling)) return false
@@ -837,17 +921,24 @@ export const flatLibrary = async (
             return true
         })
 
-        // Sort files deterministically
+        // Execute Astro Surface Harvest across apps/
+        const astroFiles = await getAstroWorkspaceSrcFiles(path.join(repoRoot, 'apps'))
+
+        // Deduplicate standard files and harvested Astro src files
+        const mergedFileSet = new Set<string>([...standardCodeFiles, ...astroFiles])
+        const codeFiles = Array.from(mergedFileSet)
+
+        // Sort files deterministically for bit-reproducible output
         codeFiles.sort((a, b) => a.localeCompare(b))
 
         if (ste) {
             await ste.hunt(ActCns.UPDATE_CONSOLE, {
                 idx: 'cns00',
-                src: `Found ${codeFiles.length} code files to flatten.`,
+                src: `>> [FLAT] Assembled ${codeFiles.length} files (including ${astroFiles.length} Astro src files).`,
             })
         }
 
-        // Read content of all files
+        // Read content and format source headers
         const fileContents = await Promise.all(
             codeFiles.map(async (file) => {
                 const content = await fs.readFile(file, 'utf8')
@@ -859,16 +950,16 @@ export const flatLibrary = async (
         )
 
         const combinedData = fileContents.join('\n\n')
-
         await fs.outputFile(outputFile, combinedData)
 
         const relOutput = path
             .relative(repoRoot, outputFile)
             .replace(/\\/g, '/')
+
         if (ste) {
             await ste.hunt(ActCns.UPDATE_CONSOLE, {
                 idx: 'cns00',
-                src: `Wrote flattened library to: ${relOutput}`,
+                src: `>> [OK] Wrote flattened library to: ${relOutput}`,
             })
         }
 
@@ -885,7 +976,7 @@ export const flatLibrary = async (
         if (ste) {
             await ste.hunt(ActCns.UPDATE_CONSOLE, {
                 idx: 'cns00',
-                src: `Error flattening library: ${err.message}`,
+                src: `>> [FAIL] Error flattening library: ${err.message}`,
             })
         }
         if (bal && bal.slv != null) {
