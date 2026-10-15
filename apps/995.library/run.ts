@@ -268,6 +268,27 @@ const init = async () => {
         }
 
         await LIBRARY.hunt(MENU_ACTION_LIBRARY.OPEN_MENU, { src: '' })
+
+        if (logWidget && Array.isArray(logWidget.logLines)) {
+            const libPkgPath = path.resolve(
+                import.meta.dirname,
+                './package.json',
+            )
+            const libPkg = fs.existsSync(libPkgPath)
+                ? JSON.parse(fs.readFileSync(libPkgPath, 'utf8'))
+                : { version: '1.0.12' }
+            logWidget.logLines = [
+                '----------------',
+                ${identity.name} ,
+                LIBRARY V,
+                '----------------',
+            ]
+            logWidget.setItems(logWidget.logLines)
+            if (typeof logWidget.scrollTo === 'function') {
+                logWidget.scrollTo(0)
+            }
+            if (logWidget.screen) logWidget.screen.render()
+        }
     } catch (err: any) {
         console.error(':: [FAIL] Terminal Runtime Panic:', err)
         process.exit(1)
