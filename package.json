@@ -52,7 +52,8 @@
         "reset": "npm run clean && rm -rf node_modules package-lock.json && npm install && npm run build",
         "//__ DEPLOYMENT ___________________________": "",
         "release:seal": "node scripts/seal-baseline.mjs",
-        "ship:staging": "npm run build && npm run deploy --workspace=@camp_candor/agent -- --env staging && npm run audit:staging"
+        "ship:staging": "npm run build && npm run deploy --workspace=@camp_candor/agent -- --env staging && npm run audit:staging",
+        "prepare": "node -e \"try { require('child_process').execSync('git config core.hooksPath .husky/_'); } catch {}\""
     },
     "lint-staged": {
         "*.{js,ts,tsx,json,css,md}": [
