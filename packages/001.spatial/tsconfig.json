@@ -1,0 +1,17 @@
+{
+    "extends": "../../apps/995.library/tsconfig-base.json",
+    "compilerOptions": {
+        "target": "ES2022",
+        "outDir": "../dist/001.spatial",
+        "composite": true,
+        "skipLibCheck": true,
+        "noImplicitAny": false,
+        "strictNullChecks": false,
+        "noUnusedLocals": false,
+        "noUnusedParameters": false,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true
+    },
+    "include": ["**/*"],
+    "exclude": ["**/node_modules"]
+}
