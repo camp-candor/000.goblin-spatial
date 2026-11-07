@@ -1,3 +1,4 @@
+
 /**
  * ============================================================================
  * :: 01.LATTICE.UNIT BARREL EXPORTS
@@ -14,14 +15,14 @@ export type {
     HexEdgeMidpoints,
     BoundarySegment,
     default as Lattice,
-} from './fce/lattice.interface.js'
+} from './fce/lattice.interface.js';
 
 export type {
     default as LatticeBit,
     ProjectLatticeDat,
     DistanceLatticeDat,
     DiskLatticeDat,
-} from './fce/lattice.bit.js'
+} from './fce/lattice.bit.js';
 
 export {
     AXIAL_COORD_MIN,
@@ -33,7 +34,7 @@ export {
     asTacticalCellId,
     asTacticalEdgeId,
     createLatticePoint,
-} from './fce/lattice.guard.js'
+} from './fce/lattice.guard.js';
 
 export {
     COORD_OFFSET,
@@ -42,4 +43,11 @@ export {
     unpackAxialCell,
     packEdgeKey,
     unpackEdgeKey,
-} from './buz/packing.buzz.js'
+} from './buz/packing.buzz.js';
+
+export {
+    hexCentroid,
+    hexVertices,
+    hexEdgeMidpoints,
+    sharedEdgeEndpoints,
+} from './buz/lattice.buzz.js';
