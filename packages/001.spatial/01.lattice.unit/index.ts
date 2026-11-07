@@ -1,4 +1,3 @@
-
 /**
  * ============================================================================
  * :: 01.LATTICE.UNIT BARREL EXPORTS
@@ -51,3 +50,21 @@ export {
     hexEdgeMidpoints,
     sharedEdgeEndpoints,
 } from './buz/lattice.buzz.js';
+
+export {
+    HEX_DIRECTIONS,
+    axialDistance,
+    axialNeighborInDirection,
+    axialNeighbors,
+    axialRing,
+    axialRange,
+    initLattice,
+    projectLattice,
+    distanceLattice,
+    diskLattice,
+} from './buz/topology.buzz.js';
+
+export * as LatticeActions from './lattice.action.js';
+export { LatticeModel } from './lattice.model.js';
+export { reducer as latticeReducer } from './lattice.reduce.js';
+export { default as LatticeUnit } from './lattice.unit.js';
