@@ -1,4 +1,3 @@
-
 /**
  * ============================================================================
  * :: DOUBLED AFFINE COORDINATE PROJECTORS (01.lattice.unit)
@@ -15,26 +14,29 @@ import type {
     HexVertices,
     HexEdgeMidpoints,
     AxialCoord,
-} from '../fce/lattice.interface.js';
+} from '../fce/lattice.interface.js'
 import {
     assertIntegerCoordinate,
     createLatticePoint,
-} from '../fce/lattice.guard.js';
-import { unpackAxialCell } from './packing.buzz.js';
+} from '../fce/lattice.guard.js'
+import { unpackAxialCell } from './packing.buzz.js'
 
 /**
  * Normalizes input arguments to an AxialCoord.
  * Accepts either (q: number, r: number) or a packed TacticalCellId.
  */
-function resolveCoord(cellOrQ: TacticalCellId | number, r?: number): AxialCoord {
+function resolveCoord(
+    cellOrQ: TacticalCellId | number,
+    r?: number,
+): AxialCoord {
     if (r === undefined) {
-        return unpackAxialCell(cellOrQ as TacticalCellId);
+        return unpackAxialCell(cellOrQ as TacticalCellId)
     }
-    assertIntegerCoordinate(cellOrQ, 'q');
-    assertIntegerCoordinate(r, 'r');
-    const q = cellOrQ;
-    const s = -q - r;
-    return Object.freeze({ q, r, s });
+    assertIntegerCoordinate(cellOrQ, 'q')
+    assertIntegerCoordinate(r, 'r')
+    const q = cellOrQ
+    const s = -q - r
+    return Object.freeze({ q, r, s })
 }
 
 /**
@@ -51,13 +53,16 @@ function resolveCoord(cellOrQ: TacticalCellId | number, r?: number): AxialCoord 
  *   cx = 4q + 2r
  *   cy = 6r
  */
-export function hexCentroid(q: number, r: number): LatticePoint;
-export function hexCentroid(cell: TacticalCellId): LatticePoint;
-export function hexCentroid(cellOrQ: TacticalCellId | number, maybeR?: number): LatticePoint {
-    const { q, r } = resolveCoord(cellOrQ, maybeR);
-    const cx = BigInt(4 * q + 2 * r);
-    const cy = BigInt(6 * r);
-    return createLatticePoint(cx, cy);
+export function hexCentroid(q: number, r: number): LatticePoint
+export function hexCentroid(cell: TacticalCellId): LatticePoint
+export function hexCentroid(
+    cellOrQ: TacticalCellId | number,
+    maybeR?: number,
+): LatticePoint {
+    const { q, r } = resolveCoord(cellOrQ, maybeR)
+    const cx = BigInt(4 * q + 2 * r)
+    const cy = BigInt(6 * r)
+    return createLatticePoint(cx, cy)
 }
 
 /**
@@ -71,21 +76,24 @@ export function hexCentroid(cellOrQ: TacticalCellId | number, maybeR?: number): 
  *   V4: (cx - 2, cy - 2) Bottom-Left (angle -150 deg)
  *   V5: (cx - 2, cy + 2) Top-Left (angle 150 deg)
  */
-export function hexVertices(q: number, r: number): HexVertices;
-export function hexVertices(cell: TacticalCellId): HexVertices;
-export function hexVertices(cellOrQ: TacticalCellId | number, maybeR?: number): HexVertices {
-    const { q, r } = resolveCoord(cellOrQ, maybeR);
-    const cx = BigInt(4 * q + 2 * r);
-    const cy = BigInt(6 * r);
+export function hexVertices(q: number, r: number): HexVertices
+export function hexVertices(cell: TacticalCellId): HexVertices
+export function hexVertices(
+    cellOrQ: TacticalCellId | number,
+    maybeR?: number,
+): HexVertices {
+    const { q, r } = resolveCoord(cellOrQ, maybeR)
+    const cx = BigInt(4 * q + 2 * r)
+    const cy = BigInt(6 * r)
 
     return Object.freeze([
-        createLatticePoint(cx, cy + 4n),       // V0
-        createLatticePoint(cx + 2n, cy + 2n),  // V1
-        createLatticePoint(cx + 2n, cy - 2n),  // V2
-        createLatticePoint(cx, cy - 4n),       // V3
-        createLatticePoint(cx - 2n, cy - 2n),  // V4
-        createLatticePoint(cx - 2n, cy + 2n),  // V5
-    ]) as HexVertices;
+        createLatticePoint(cx, cy + 4n), // V0
+        createLatticePoint(cx + 2n, cy + 2n), // V1
+        createLatticePoint(cx + 2n, cy - 2n), // V2
+        createLatticePoint(cx, cy - 4n), // V3
+        createLatticePoint(cx - 2n, cy - 2n), // V4
+        createLatticePoint(cx - 2n, cy + 2n), // V5
+    ]) as HexVertices
 }
 
 /**
@@ -99,21 +107,24 @@ export function hexVertices(cellOrQ: TacticalCellId | number, maybeR?: number): 
  *   E4: (cx - 2, cy)     West       (between V4 and V5)
  *   E5: (cx - 1, cy + 3) North-West (between V5 and V0)
  */
-export function hexEdgeMidpoints(q: number, r: number): HexEdgeMidpoints;
-export function hexEdgeMidpoints(cell: TacticalCellId): HexEdgeMidpoints;
-export function hexEdgeMidpoints(cellOrQ: TacticalCellId | number, maybeR?: number): HexEdgeMidpoints {
-    const { q, r } = resolveCoord(cellOrQ, maybeR);
-    const cx = BigInt(4 * q + 2 * r);
-    const cy = BigInt(6 * r);
+export function hexEdgeMidpoints(q: number, r: number): HexEdgeMidpoints
+export function hexEdgeMidpoints(cell: TacticalCellId): HexEdgeMidpoints
+export function hexEdgeMidpoints(
+    cellOrQ: TacticalCellId | number,
+    maybeR?: number,
+): HexEdgeMidpoints {
+    const { q, r } = resolveCoord(cellOrQ, maybeR)
+    const cx = BigInt(4 * q + 2 * r)
+    const cy = BigInt(6 * r)
 
     return Object.freeze([
-        createLatticePoint(cx + 1n, cy + 3n),  // E0
-        createLatticePoint(cx + 2n, cy),        // E1
-        createLatticePoint(cx + 1n, cy - 3n),  // E2
-        createLatticePoint(cx - 1n, cy - 3n),  // E3
-        createLatticePoint(cx - 2n, cy),        // E4
-        createLatticePoint(cx - 1n, cy + 3n),  // E5
-    ]) as HexEdgeMidpoints;
+        createLatticePoint(cx + 1n, cy + 3n), // E0
+        createLatticePoint(cx + 2n, cy), // E1
+        createLatticePoint(cx + 1n, cy - 3n), // E2
+        createLatticePoint(cx - 1n, cy - 3n), // E3
+        createLatticePoint(cx - 2n, cy), // E4
+        createLatticePoint(cx - 1n, cy + 3n), // E5
+    ]) as HexEdgeMidpoints
 }
 
 /**
@@ -128,60 +139,62 @@ export function hexEdgeMidpoints(cellOrQ: TacticalCellId | number, maybeR?: numb
  */
 export function sharedEdgeEndpoints(
     cellA: TacticalCellId | number,
-    cellB: TacticalCellId | number
+    cellB: TacticalCellId | number,
 ): readonly [LatticePoint, LatticePoint] {
-    const coordA = unpackAxialCell(cellA);
-    const coordB = unpackAxialCell(cellB);
+    const coordA = unpackAxialCell(cellA)
+    const coordB = unpackAxialCell(cellB)
 
-    const dq = coordB.q - coordA.q;
-    const dr = coordB.r - coordA.r;
-    const ds = coordB.s - coordA.s;
+    const dq = coordB.q - coordA.q
+    const dr = coordB.r - coordA.r
+    const ds = coordB.s - coordA.s
 
-    const axialDist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(ds));
+    const axialDist = Math.max(Math.abs(dq), Math.abs(dr), Math.abs(ds))
     if (axialDist !== 1) {
         throw new Error(
-            `NON_ADJACENT_CELLS: Cells must have axial distance 1 to share an edge. Distance: ${axialDist}`
-        );
+            `NON_ADJACENT_CELLS: Cells must have axial distance 1 to share an edge. Distance: ${axialDist}`,
+        )
     }
 
-    const vertsA = hexVertices(coordA.q, coordA.r);
+    const vertsA = hexVertices(coordA.q, coordA.r)
 
     // Direction mapping on pointy-top hex grid to shared vertex indices of Cell A
-    let vIdx1: number;
-    let vIdx2: number;
+    let vIdx1: number
+    let vIdx2: number
 
     if (dq === 1 && dr === 0) {
         // East (+1, 0): Shared edge is E1, connecting V1 and V2
-        vIdx1 = 1;
-        vIdx2 = 2;
+        vIdx1 = 1
+        vIdx2 = 2
     } else if (dq === 1 && dr === -1) {
         // South-East (+1, -1): Shared edge is E2, connecting V2 and V3
-        vIdx1 = 2;
-        vIdx2 = 3;
+        vIdx1 = 2
+        vIdx2 = 3
     } else if (dq === 0 && dr === -1) {
         // South-West (0, -1): Shared edge is E3, connecting V3 and V4
-        vIdx1 = 3;
-        vIdx2 = 4;
+        vIdx1 = 3
+        vIdx2 = 4
     } else if (dq === -1 && dr === 0) {
         // West (-1, 0): Shared edge is E4, connecting V4 and V5
-        vIdx1 = 4;
-        vIdx2 = 5;
+        vIdx1 = 4
+        vIdx2 = 5
     } else if (dq === -1 && dr === 1) {
         // North-West (-1, +1): Shared edge is E5, connecting V5 and V0
-        vIdx1 = 5;
-        vIdx2 = 0;
+        vIdx1 = 5
+        vIdx2 = 0
     } else if (dq === 0 && dr === 1) {
         // North-East (0, +1): Shared edge is E0, connecting V0 and V1
-        vIdx1 = 0;
-        vIdx2 = 1;
+        vIdx1 = 0
+        vIdx2 = 1
     } else {
-        throw new Error(`UNREACHABLE_DIRECTION: Invalid axial neighbor offset: (${dq}, ${dr})`);
+        throw new Error(
+            `UNREACHABLE_DIRECTION: Invalid axial neighbor offset: (${dq}, ${dr})`,
+        )
     }
 
-    const pt1 = vertsA[vIdx1];
-    const pt2 = vertsA[vIdx2];
+    const pt1 = vertsA[vIdx1]
+    const pt2 = vertsA[vIdx2]
 
     // Canonical sorting guarantees optical symmetry: sharedEdge(A, B) === sharedEdge(B, A)
-    const isPt1Smaller = pt1.x < pt2.x || (pt1.x === pt2.x && pt1.y < pt2.y);
-    return Object.freeze(isPt1Smaller ? [pt1, pt2] : [pt2, pt1]);
+    const isPt1Smaller = pt1.x < pt2.x || (pt1.x === pt2.x && pt1.y < pt2.y)
+    return Object.freeze(isPt1Smaller ? [pt1, pt2] : [pt2, pt1])
 }
