@@ -20,7 +20,6 @@ describe('Task 4.3 Optical Transmission Basis Point Calculation', () => {
 
         expect(() => toBasisPoints(-1)).toThrow(RangeError)
         expect(() => toBasisPoints(10001)).toThrow(RangeError)
-        // @ts-expect-error - testing float rejection
         expect(() => toBasisPoints(500.5)).toThrow(TypeError)
     })
 

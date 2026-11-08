@@ -3,6 +3,23 @@ import {
     packAxial,
     PackedAxial,
 } from '../../28.axial.unit/val/axial.model.js'
+export const initWitness = (cpy: WitnessModel, bal: WitnessBit, ste: State) => {
+    debugger
+    return cpy
+}
+
+export const updateWitness = (
+    cpy: WitnessModel,
+    bal: WitnessBit,
+    ste: State,
+) => {
+    return cpy
+}
+
+import { WitnessModel } from '../witness.model.js'
+import WitnessBit from '../fce/witness.bit.js'
+import State from '../../99.core/state.js'
+
 import {
     BasisPoints,
     CellOpacitySample,

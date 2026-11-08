@@ -218,57 +218,73 @@ export const updateBus = async (cpy: BusModel, bal: BusBit, ste: State) => {
 
 var patch = (ste, type, bale) => ste.dispatch({ type, bale })
 
-import { SpatialBus, SpatialBusEvent, SpatialBusListener } from '../../98.menu.unit/fce/menu.interface.js';
+import {
+    SpatialBus,
+    SpatialBusEvent,
+    SpatialBusListener,
+} from '../../98.menu.unit/fce/menu.interface.js'
 
 export class ReactiveSpatialBus implements SpatialBus {
-  private readonly listeners: Map<string, Set<SpatialBusListener>> = new Map();
-  private history: SpatialBusEvent[] = [];
+    private readonly listeners: Map<string, Set<SpatialBusListener>> = new Map()
+    private history: SpatialBusEvent[] = []
+    private destroyed = false
 
-  public emit(type: string, payload: Record<string, unknown> = {}): void {
-    const event: SpatialBusEvent = {
-      type,
-      payload,
-      timestamp: Date.now()
-    };
-    this.history.push(event);
+    public destroy(): void {
+        this.destroyed = true
+        this.listeners.clear()
+        this.history = []
+    }
 
-    const typeListeners = this.listeners.get(type);
-    if (typeListeners) {
-      for (const listener of typeListeners) {
-        try {
-          listener(event);
-        } catch (err) {
-          // Isolate subscriber exceptions to prevent event loop collapse
-          const errorMsg = err instanceof Error ? err.message : String(err);
-          process.stderr.write(`:: [BUS_ERROR] [${type}] ${errorMsg}\n`);
+    public emit(type: string, payload: Record<string, unknown> = {}): void {
+        if (this.destroyed) return
+        const event: SpatialBusEvent = {
+            type,
+            payload,
+            timestamp: Date.now(),
         }
-      }
+        this.history.push(event)
+
+        const typeListeners = this.listeners.get(type)
+        if (typeListeners) {
+            for (const listener of typeListeners) {
+                try {
+                    listener(event)
+                } catch (err) {
+                    // Isolate subscriber exceptions to prevent event loop collapse
+                    const errorMsg =
+                        err instanceof Error ? err.message : String(err)
+                    process.stderr.write(
+                        `:: [BUS_ERROR] [${type}] ${errorMsg}\n`,
+                    )
+                }
+            }
+        }
     }
-  }
 
-  public subscribe(type: string, listener: SpatialBusListener): () => void {
-    if (!this.listeners.has(type)) {
-      this.listeners.set(type, new Set());
+    public subscribe(type: string, listener: SpatialBusListener): () => void {
+        if (this.destroyed) return () => {}
+        if (!this.listeners.has(type)) {
+            this.listeners.set(type, new Set())
+        }
+        const set = this.listeners.get(type)!
+        set.add(listener)
+
+        return () => {
+            set.delete(listener)
+            if (set.size === 0) {
+                this.listeners.delete(type)
+            }
+        }
     }
-    const set = this.listeners.get(type)!;
-    set.add(listener);
 
-    return () => {
-      set.delete(listener);
-      if (set.size === 0) {
-        this.listeners.delete(type);
-      }
-    };
-  }
+    public getHistory(): readonly SpatialBusEvent[] {
+        return this.history
+    }
 
-  public getHistory(): readonly SpatialBusEvent[] {
-    return this.history;
-  }
-
-  public clear(): void {
-    this.listeners.clear();
-    this.history = [];
-  }
+    public clear(): void {
+        this.listeners.clear()
+        this.history = []
+    }
 }
 
-export const createSpatialBus = (): SpatialBus => new ReactiveSpatialBus();
+export const createSpatialBus = (): SpatialBus => new ReactiveSpatialBus()

@@ -1,4 +1,9 @@
 import { AxialCoord, PackedAxial } from '../../28.axial.unit/val/axial.model.js'
+import WitnessBit from './witness.bit.js'
+
+export default interface Witness {
+    //witnessBitList: WitnessBit[] = [];
+}
 
 export type BasisPoints = number & { readonly __brand: unique symbol }
 
