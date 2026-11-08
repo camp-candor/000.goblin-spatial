@@ -14,14 +14,14 @@ export type {
     HexEdgeMidpoints,
     BoundarySegment,
     default as Lattice,
-} from './fce/lattice.interface.js';
+} from './fce/lattice.interface.js'
 
 export type {
     default as LatticeBit,
     ProjectLatticeDat,
     DistanceLatticeDat,
     DiskLatticeDat,
-} from './fce/lattice.bit.js';
+} from './fce/lattice.bit.js'
 
 export {
     AXIAL_COORD_MIN,
@@ -33,7 +33,7 @@ export {
     asTacticalCellId,
     asTacticalEdgeId,
     createLatticePoint,
-} from './fce/lattice.guard.js';
+} from './fce/lattice.guard.js'
 
 export {
     COORD_OFFSET,
@@ -42,14 +42,14 @@ export {
     unpackAxialCell,
     packEdgeKey,
     unpackEdgeKey,
-} from './buz/packing.buzz.js';
+} from './buz/packing.buzz.js'
 
 export {
     hexCentroid,
     hexVertices,
     hexEdgeMidpoints,
     sharedEdgeEndpoints,
-} from './buz/lattice.buzz.js';
+} from './buz/lattice.buzz.js'
 
 export {
     HEX_DIRECTIONS,
@@ -62,9 +62,9 @@ export {
     projectLattice,
     distanceLattice,
     diskLattice,
-} from './buz/topology.buzz.js';
+} from './buz/topology.buzz.js'
 
-export * as LatticeActions from './lattice.action.js';
-export { LatticeModel } from './lattice.model.js';
-export { reducer as latticeReducer } from './lattice.reduce.js';
-export { default as LatticeUnit } from './lattice.unit.js';
+export * as LatticeActions from './lattice.action.js'
+export { LatticeModel } from './lattice.model.js'
+export { reducer as latticeReducer } from './lattice.reduce.js'
+export { default as LatticeUnit } from './lattice.unit.js'

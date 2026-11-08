@@ -1,13 +1,15 @@
-import { BigIntFraction } from '../fce/segment.interface.js';
+import { BigIntFraction } from '../fce/segment.interface.js'
 
 export function createFraction(num: bigint, den: bigint): BigIntFraction {
-  if (den === 0n) {
-    throw new RangeError('FRACTION_ZERO_DENOMINATOR: Denominator cannot be zero');
-  }
-  if (den < 0n) {
-    return { num: -num, den: -den };
-  }
-  return { num, den };
+    if (den === 0n) {
+        throw new RangeError(
+            'FRACTION_ZERO_DENOMINATOR: Denominator cannot be zero',
+        )
+    }
+    if (den < 0n) {
+        return { num: -num, den: -den }
+    }
+    return { num, den }
 }
 
 /**
@@ -15,9 +17,9 @@ export function createFraction(num: bigint, den: bigint): BigIntFraction {
  * a.num / a.den <=> b.num / b.den === a.num * b.den <=> b.num * a.den
  */
 export function compareFractions(a: BigIntFraction, b: BigIntFraction): number {
-  const left = a.num * b.den;
-  const right = b.num * a.den;
-  if (left < right) return -1;
-  if (left > right) return 1;
-  return 0;
+    const left = a.num * b.den
+    const right = b.num * a.den
+    if (left < right) return -1
+    if (left > right) return 1
+    return 0
 }
