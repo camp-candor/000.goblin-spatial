@@ -1,6 +1,6 @@
 import clone from 'clone-deep'
 import * as Act from './observer.action'
-import { ObserverModel } from './observer.model'
+import { ObserverModel } from './val/observer.model.js'
 import * as Buzz from './observer.buzzer'
 import State from '../99.core/state'
 
