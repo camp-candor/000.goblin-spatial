@@ -4,4 +4,5 @@ export default defineWorkspace([
     'apps/worker/vitest.config.ts',
     'packages/100.agent/vitest.config.ts',
     'packages/001.spatial/vitest.config.ts',
+    'packages/301.spatial/vitest.config.ts',
 ])
