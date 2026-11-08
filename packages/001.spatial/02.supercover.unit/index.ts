@@ -11,13 +11,13 @@ export type {
     CrossedFeatureKind,
     CrossedFeature,
     default as Supercover,
-} from './fce/supercover.interface.js';
+} from './fce/supercover.interface.js'
 
 export type {
     default as SupercoverBit,
     IntersectSegmentDat,
     TraceSupercoverDat,
-} from './fce/supercover.bit.js';
+} from './fce/supercover.bit.js'
 
 export {
     crossProduct,
@@ -25,4 +25,4 @@ export {
     isPointOnSegment,
     compareRationals,
     classifySegmentEdgeIntersection,
-} from './buz/cross-product.buzz.js';
+} from './buz/cross-product.buzz.js'

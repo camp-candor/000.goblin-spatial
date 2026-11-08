@@ -103,84 +103,99 @@ export const updateMenu = async (cpy: MenuModel, bal: MenuBit, ste: State) => {
 
 const patch = (ste, type, bale) => ste.dispatch({ type, bale })
 
-import { MenuActionPayload, MenuCatalogState, SpatialBus } from '../fce/menu.interface.js';
+import {
+    MenuActionPayload,
+    MenuCatalogState,
+    SpatialBus,
+} from '../fce/menu.interface.js'
 
 export class MenuDispatcher {
-  private actions: MenuActionPayload[] = [];
-  private activeIndex: number = 0;
+    private actions: MenuActionPayload[] = []
+    private activeIndex: number = 0
 
-  constructor(private readonly bus: SpatialBus) {
-    this.registerDefaultActions();
-  }
-
-  public registerAction(action: MenuActionPayload): void {
-    const exists = this.actions.some((a) => a.id === action.id);
-    if (exists) {
-      throw new Error(`DUPLICATE_ACTION_ID: ${action.id}`);
+    constructor(private readonly bus: SpatialBus) {
+        this.registerDefaultActions()
     }
-    this.actions.push(action);
-  }
 
-  public getCatalog(): MenuCatalogState {
-    const currentAction = this.actions[this.activeIndex];
-    return {
-      activeIndex: this.activeIndex,
-      activeCategory: currentAction ? currentAction.category : 'NONE',
-      actions: [...this.actions]
-    };
-  }
-
-  public selectNext(): void {
-    if (this.actions.length === 0) return;
-    this.activeIndex = (this.activeIndex + 1) % this.actions.length;
-    this.bus.emit('MENU_INDEX_CHANGED', { index: this.activeIndex });
-  }
-
-  public selectPrevious(): void {
-    if (this.actions.length === 0) return;
-    this.activeIndex = (this.activeIndex - 1 + this.actions.length) % this.actions.length;
-    this.bus.emit('MENU_INDEX_CHANGED', { index: this.activeIndex });
-  }
-
-  public async executeSelected(): Promise<void> {
-    const action = this.actions[this.activeIndex];
-    if (!action) {
-      throw new Error('NO_ACTION_SELECTED');
+    public registerAction(action: MenuActionPayload): void {
+        const exists = this.actions.some((a) => a.id === action.id)
+        if (exists) {
+            throw new Error(`DUPLICATE_ACTION_ID: ${action.id}`)
+        }
+        this.actions.push(action)
     }
-    this.bus.emit('TELEMETRY_LOG', { message: `>> EXECUTING: [${action.shortcut}] ${action.label}` });
-    await action.execute(this.bus);
-    this.bus.emit('TELEMETRY_LOG', { message: `>> COMPLETED: [${action.shortcut}] ${action.label}` });
-  }
 
-  private registerDefaultActions(): void {
-    this.registerAction({
-      id: 'D01_RESET_KERNEL',
-      label: 'Reset Spatial Kernel State',
-      shortcut: 'D01',
-      category: 'DIAGNOSTIC',
-      execute: async (bus) => {
-        bus.emit('KERNEL_STATE_RESET', { timestamp: Date.now() });
-      }
-    });
+    public getCatalog(): MenuCatalogState {
+        const currentAction = this.actions[this.activeIndex]
+        return {
+            activeIndex: this.activeIndex,
+            activeCategory: currentAction ? currentAction.category : 'NONE',
+            actions: [...this.actions],
+        }
+    }
 
-    this.registerAction({
-      id: 'D02_INSPECT_TOPOLOGY',
-      label: 'Inspect Active Topology Manifest',
-      shortcut: 'D02',
-      category: 'TOPOLOGY',
-      execute: async (bus) => {
-        bus.emit('TELEMETRY_LOG', { message: ':: Manifest: [000.goblin-spatial] Cached Nodes: 0' });
-      }
-    });
+    public selectNext(): void {
+        if (this.actions.length === 0) return
+        this.activeIndex = (this.activeIndex + 1) % this.actions.length
+        this.bus.emit('MENU_INDEX_CHANGED', { index: this.activeIndex })
+    }
 
-    this.registerAction({
-      id: 'D03_RUN_BENCHMARK',
-      label: 'Execute Sub-Millisecond Profiler',
-      shortcut: 'D03',
-      category: 'SIMULATION',
-      execute: async (bus) => {
-        bus.emit('TELEMETRY_LOG', { message: ':: Benchmark: Budget Target <= 2ms. Status: NOMINAL' });
-      }
-    });
-  }
+    public selectPrevious(): void {
+        if (this.actions.length === 0) return
+        this.activeIndex =
+            (this.activeIndex - 1 + this.actions.length) % this.actions.length
+        this.bus.emit('MENU_INDEX_CHANGED', { index: this.activeIndex })
+    }
+
+    public async executeSelected(): Promise<void> {
+        const action = this.actions[this.activeIndex]
+        if (!action) {
+            throw new Error('NO_ACTION_SELECTED')
+        }
+        this.bus.emit('TELEMETRY_LOG', {
+            message: `>> EXECUTING: [${action.shortcut}] ${action.label}`,
+        })
+        await action.execute(this.bus)
+        this.bus.emit('TELEMETRY_LOG', {
+            message: `>> COMPLETED: [${action.shortcut}] ${action.label}`,
+        })
+    }
+
+    private registerDefaultActions(): void {
+        this.registerAction({
+            id: 'D01_RESET_KERNEL',
+            label: 'Reset Spatial Kernel State',
+            shortcut: 'D01',
+            category: 'DIAGNOSTIC',
+            execute: async (bus) => {
+                bus.emit('KERNEL_STATE_RESET', { timestamp: Date.now() })
+            },
+        })
+
+        this.registerAction({
+            id: 'D02_INSPECT_TOPOLOGY',
+            label: 'Inspect Active Topology Manifest',
+            shortcut: 'D02',
+            category: 'TOPOLOGY',
+            execute: async (bus) => {
+                bus.emit('TELEMETRY_LOG', {
+                    message:
+                        ':: Manifest: [000.goblin-spatial] Cached Nodes: 0',
+                })
+            },
+        })
+
+        this.registerAction({
+            id: 'D03_RUN_BENCHMARK',
+            label: 'Execute Sub-Millisecond Profiler',
+            shortcut: 'D03',
+            category: 'SIMULATION',
+            execute: async (bus) => {
+                bus.emit('TELEMETRY_LOG', {
+                    message:
+                        ':: Benchmark: Budget Target <= 2ms. Status: NOMINAL',
+                })
+            },
+        })
+    }
 }
