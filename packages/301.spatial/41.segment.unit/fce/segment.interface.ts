@@ -1,5 +1,9 @@
 import { AxialCoord, PackedAxial } from '../../28.axial.unit/val/axial.model.js';
 
+export default interface Segment {
+
+}
+
 export type SegmentContactKind =
   | 'CELL_INTERIOR'
   | 'SHARED_EDGE'
