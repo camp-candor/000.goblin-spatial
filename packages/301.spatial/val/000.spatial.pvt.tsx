@@ -1,5 +1,9 @@
 import { createSpatialBus } from '../99.bus.unit/buz/bus.buzz.js';
 import { MenuDispatcher } from '../98.menu.unit/buz/00.menu.buzz.js';
+import { createLoSVisualizerAction } from '../98.menu.unit/buz/03.los-menu.buzz.js';
+import { createLatticeInspectionAction } from '../98.menu.unit/buz/01.lattice-menu.buzz.js';
+import { createTopologyLoaderAction } from '../98.menu.unit/buz/02.topology-menu.buzz.js';
+import { TopologyDatabase } from '../07.database.unit/buz/database.buzz.js';
 
 export interface CockpitInstance {
   readonly bus: ReturnType<typeof createSpatialBus>;
@@ -12,13 +16,24 @@ export function initializeCockpitHarness(): CockpitInstance {
   const bus = createSpatialBus();
   const menu = new MenuDispatcher(bus);
   const logs: string[] = [];
+  let asciiFrame: string = '';
 
-  const unsubscribe = bus.subscribe('TELEMETRY_LOG', (evt) => {
+  const db = new TopologyDatabase();
+
+  menu.registerAction(createLoSVisualizerAction());
+  menu.registerAction(createLatticeInspectionAction());
+  menu.registerAction(createTopologyLoaderAction(db));
+
+  const unsubscribeTelemetry = bus.subscribe('TELEMETRY_LOG', (evt) => {
     const msg = String(evt.payload.message || '');
     logs.push(msg);
     if (logs.length > 100) {
       logs.shift();
     }
+  });
+
+  const unsubscribeAscii = bus.subscribe('ASCII_FRAME_RENDER', (evt) => {
+    asciiFrame = String(evt.payload.frame || '');
   });
 
   const renderTelemetryFrame = (): string => {
@@ -32,17 +47,23 @@ export function initializeCockpitHarness(): CockpitInstance {
 
     const recentLogs = logs.slice(-5).join('\n') || '  >> [SYSTEM READY: Awaiting Operator Input]';
 
-    return [
+    const lines = [
       '+--------------------------------------------------------------------------+',
       '| 000.goblin-spatial :: BLESSED TERMINAL COCKPIT (Phase 1)                |',
       '+--------------------------------------------------------------------------+',
       '| MENU CONTROLS (Columns 0-4, Rows 0-12)                                   |',
       actionLines,
-      '+--------------------------------------------------------------------------+',
+      '+--------------------------------------------------------------------------+'
+    ];
+    if (asciiFrame) {
+      lines.push(asciiFrame);
+    }
+    lines.push(
       '| TELEMETRY LOG [cns00] (Columns 4-12, Rows 3-12)                          |',
       recentLogs,
       '+--------------------------------------------------------------------------+'
-    ].join('\n');
+    );
+    return lines.join('\n');
   };
 
   return {
@@ -50,7 +71,8 @@ export function initializeCockpitHarness(): CockpitInstance {
     menu,
     renderTelemetryFrame,
     destroy: () => {
-      unsubscribe();
+      unsubscribeTelemetry();
+      unsubscribeAscii();
       bus.clear();
     }
   };
