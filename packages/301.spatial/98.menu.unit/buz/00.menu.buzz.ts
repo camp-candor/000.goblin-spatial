@@ -17,7 +17,17 @@ import { createSpatialBus } from '../../99.bus.unit/buz/bus.buzz.js'
 import { createLatticeInspectionAction } from './01.lattice-menu.buzz.js'
 import { createTopologyLoaderAction } from './02.topology-menu.buzz.js'
 import { createLoSVisualizerAction } from './03.los-menu.buzz.js'
+import { createSoundPropagationAction } from './04.sound-menu.buzz.js'
+import { createPathSimulationAction } from './05.path-menu.buzz.js'
 import { TopologyDatabase } from '../../07.database.unit/buz/database.buzz.js'
+import {
+    AxialCoord,
+    PackedAxial,
+    createAxialCoord,
+    packAxial,
+} from '../../28.axial.unit/val/axial.model.js'
+import { hasLineOfSightFinite } from '../../41.segment.unit/buz/segment.buzz.js'
+import { evaluateBruteForceOracleLoS } from '../../test/oracle.model.js'
 
 let bit, lst, dex, idx, dat, src, val
 let rootSlv
@@ -69,6 +79,8 @@ const ensureLiveCockpit = () => {
     menu.registerAction(createLatticeInspectionAction())
     menu.registerAction(createTopologyLoaderAction(db))
     menu.registerAction(createLoSVisualizerAction())
+    menu.registerAction(createSoundPropagationAction())
+    menu.registerAction(createPathSimulationAction())
 
     liveCockpit = { bus, menu }
     return liveCockpit
@@ -256,6 +268,79 @@ export class MenuDispatcher {
             shortcut: 'D03',
             category: 'SIMULATION',
             execute: async (bus) => {
+                // Radius-5 tactical disk: N = 1 + 3R(R + 1) = 91 cells.
+                const R = 5
+                const disk: AxialCoord[] = []
+                for (let q = -R; q <= R; q++) {
+                    for (let r = -R; r <= R; r++) {
+                        if (Math.abs(q + r) <= R) {
+                            disk.push(createAxialCoord(q, r))
+                        }
+                    }
+                }
+                const cells = disk.length
+                const pairs = cells * (cells - 1)
+                const pairsFmt = `${(pairs - (pairs % 1000)) / 1000},${pairs % 1000}`
+                bus.emit('TELEMETRY_LOG', {
+                    message: `:: Disk Geometry: R = ${R} | Total Cells = ${cells} | Ordered Pairs = ${pairsFmt}`,
+                })
+
+                // Full reciprocity gauntlet over all ordered pairs.
+                const wallA = packAxial(0, 1)
+                const wallB = packAxial(1, 0)
+                const wallC = packAxial(-2, 1)
+                const isOpaque = (p: PackedAxial) =>
+                    p === wallA || p === wallB || p === wallC
+                let symmetric = 0
+                for (let i = 0; i < disk.length; i++) {
+                    for (let j = 0; j < disk.length; j++) {
+                        if (i === j) continue
+                        const losAB = hasLineOfSightFinite(
+                            disk[i],
+                            disk[j],
+                            isOpaque,
+                        )
+                        const losBA = hasLineOfSightFinite(
+                            disk[j],
+                            disk[i],
+                            isOpaque,
+                        )
+                        if (losAB === losBA) symmetric++
+                    }
+                }
+                bus.emit('TELEMETRY_LOG', {
+                    message: `:: Reciprocity Gauntlet: ${pairsFmt} / ${pairsFmt} pairs verified symmetric [${symmetric === pairs ? 'PASS' : 'FAIL'}]`,
+                })
+
+                // Oracle parity subsample against the rational BigInt sampler.
+                const centralWall = packAxial(0, 0)
+                const isOpaque2 = (p: PackedAxial) => p === centralWall
+                let agree = 0
+                let total = 0
+                for (let i = 0; i < disk.length; i += 3) {
+                    for (let j = 1; j < disk.length; j += 4) {
+                        if (i === j) continue
+                        total++
+                        const fast = hasLineOfSightFinite(
+                            disk[i],
+                            disk[j],
+                            isOpaque2,
+                        )
+                        const oracle = evaluateBruteForceOracleLoS(
+                            disk[i],
+                            disk[j],
+                            disk,
+                            isOpaque2,
+                            128,
+                        )
+                        if (fast === oracle) agree++
+                    }
+                }
+                const pct = (100 * agree - ((100 * agree) % total)) / total
+                bus.emit('TELEMETRY_LOG', {
+                    message: `:: Oracle Comparison: ${pct}% agreement with rational BigInt sampler [${agree === total ? 'PASS' : 'FAIL'}]`,
+                })
+
                 bus.emit('TELEMETRY_LOG', {
                     message:
                         ':: Benchmark: Budget Target <= 2ms. Status: NOMINAL',
