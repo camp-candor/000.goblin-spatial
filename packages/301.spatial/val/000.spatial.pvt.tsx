@@ -44,10 +44,10 @@ export function initializeCockpitHarness(): CockpitInstance {
             })
             .join('\n')
 
-        // Take more logs to ensure we capture the whole test stream if needed,
-        // or just enough to cover the required telemetry outputs
+        // Window covers the full LOS01 stream: base telemetry plus the
+        // segment, vertex-policy, and photometry blocks after the ASCII frame.
         const recentLogs =
-            logs.slice(-8).join('\n') ||
+            logs.slice(-18).join('\n') ||
             '  >> [SYSTEM READY: Awaiting Operator Input]'
 
         return [

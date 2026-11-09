@@ -52,6 +52,20 @@ const ensureLiveCockpit = () => {
         })
     })
 
+    // Forward ASCII tactical frames into the live cns00 console pane.
+    bus.subscribe('ASCII_FRAME_RENDER', (evt: any) => {
+        const LIBRARY = (global as any).LIBRARY
+        if (LIBRARY == null) return
+        const frame = String(evt?.payload?.frame || '')
+        if (frame === '') return
+        for (const line of frame.split('\n')) {
+            void LIBRARY.hunt(UPDATE_CONSOLE, {
+                idx: 'cns00',
+                src: line,
+            })
+        }
+    })
+
     menu.registerAction(createLatticeInspectionAction())
     menu.registerAction(createTopologyLoaderAction(db))
     menu.registerAction(createLoSVisualizerAction())
