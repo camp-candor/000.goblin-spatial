@@ -337,6 +337,25 @@ const init = async () => {
 
 // 4. Main Build & Startup Pipeline
 const main = async () => {
+    // Fail-safe operator exit: pressing 'q' at any cockpit depth leaves the
+    // curses alternate screen buffer and returns control to the shell.
+    // Armed before boot so it cannot be lost to a late init() path.
+    process.stdin.on('data', (chunk: Buffer) => {
+        if (chunk.toString('utf8') === 'q') {
+            try {
+                process.stdout.write('\x1b[?1049l')
+                const std = process.stdout as any
+                if (typeof std.cursorTo === 'function') std.cursorTo(0, 0)
+                process.stdout.write('\x1b[?25h')
+                process.stdout.write('\x1b[0m')
+                process.stdout.write('\n>> [OK] Cockpit closed by operator (q). Goodbye.\n')
+            } catch {
+                // Terminal restore is best-effort on forced teardown.
+            }
+            process.exit(0)
+        }
+    })
+
     try {
         const existingPackages = getExistingPackages()
         console.log(
