@@ -1,3 +1,140 @@
+import {
+    BatchExecutionResult,
+    BatchExecutionSummary,
+    BatchQueryEnvelope,
+    HomogeneousRaycastBatch,
+    SpatialBatchAggregator,
+} from '../fce/collect.interface.js'
+import {
+    BatchExecutionResultSchema,
+    BatchQueryEnvelopeSchema,
+} from '../val/collect.model.js'
+import {
+    PureSpatialKernel,
+    SpatialExecutionContext,
+    SynchronousExecutionReceipt,
+} from '../../00.spatial.unit/fce/spatial.interface.js'
+import { createSpatialKernel } from '../../00.spatial.unit/buz/spatial.buzz.js'
+import { PerceptCandidate } from '../../42.receipt.unit/fce/receipt.interface.js'
+import { sha256Hex } from '../../19.ledger.unit/buz/ledger.buzz.js'
+
+function deepFreeze<T>(obj: T): Readonly<T> {
+    if (obj === null || typeof obj !== 'object') {
+        return obj
+    }
+    Object.freeze(obj)
+    for (const key of Object.keys(obj as object)) {
+        const value = (obj as Record<string, unknown>)[key]
+        if (
+            value !== null &&
+            typeof value === 'object' &&
+            !Object.isFrozen(value)
+        ) {
+            deepFreeze(value)
+        }
+    }
+    return obj as Readonly<T>
+}
+
+export class SpatialBatchCollector implements SpatialBatchAggregator {
+    public readonly kernel: PureSpatialKernel
+
+    constructor(kernel?: PureSpatialKernel) {
+        this.kernel = kernel ?? createSpatialKernel()
+    }
+
+    /**
+     * Executes heterogeneous spatial queries synchronously in key-sorted order,
+     * producing consolidated receipts and a joint SHA-256 Merkle root.
+     */
+    public executeBatch(
+        envelope: BatchQueryEnvelope,
+        context?: SpatialExecutionContext,
+    ): BatchExecutionResult {
+        const parsedEnvelope = BatchQueryEnvelopeSchema.parse(envelope)
+        const startHr = process.hrtime.bigint()
+
+        const queryKeys = Object.keys(parsedEnvelope.queries).sort((a, b) =>
+            a < b ? -1 : a > b ? 1 : 0,
+        )
+
+        const receipts: Record<string, SynchronousExecutionReceipt> = {}
+        let succeededCount = 0
+        let failedCount = 0
+        const receiptHashes: string[] = []
+
+        for (let i = 0; i < queryKeys.length; i++) {
+            const key = queryKeys[i]
+            const rawQuery = parsedEnvelope.queries[key]
+
+            const receipt = this.kernel.executeSynchronousQuery(
+                rawQuery,
+                context,
+            )
+            receipts[key] = receipt
+
+            if (receipt.ok) {
+                succeededCount++
+            } else {
+                failedCount++
+            }
+
+            receiptHashes.push(`${key}:${receipt.auditQuadruple.receiptHash}`)
+        }
+
+        const endHr = process.hrtime.bigint()
+        const totalDurationMicros = Number((endHr - startHr) / 1000n)
+        const totalQueries = queryKeys.length
+        const averageDurationMicros =
+            totalQueries > 0
+                ? Math.trunc(totalDurationMicros / totalQueries)
+                : 0
+
+        const batchAuditHash = sha256Hex(
+            `BATCH::${parsedEnvelope.batchId}::${receiptHashes.join('|')}`,
+        )
+
+        const summary: BatchExecutionSummary = {
+            totalQueries,
+            succeededCount,
+            failedCount,
+            totalDurationMicros,
+            averageDurationMicros,
+            batchAuditHash,
+        }
+
+        const rawResult: BatchExecutionResult = {
+            batchId: parsedEnvelope.batchId,
+            receipts,
+            summary,
+        }
+
+        const validatedResult = BatchExecutionResultSchema.parse(rawResult)
+        return deepFreeze(validatedResult) as BatchExecutionResult
+    }
+
+    /**
+     * Optimized homogeneous raycast batch executor.
+     */
+    public executeRaycastBatch(
+        batch: HomogeneousRaycastBatch,
+        context?: SpatialExecutionContext,
+    ): BatchExecutionResult<PerceptCandidate> {
+        const envelope: BatchQueryEnvelope = {
+            batchId: batch.batchId,
+            queries: batch.queries,
+        }
+        return this.executeBatch(
+            envelope,
+            context,
+        ) as BatchExecutionResult<PerceptCandidate>
+    }
+}
+
+export const createBatchCollector = (
+    kernel?: PureSpatialKernel,
+): SpatialBatchAggregator => new SpatialBatchCollector(kernel)
+
 import * as ActCol from '../../97.collect.unit/collect.action.js'
 
 import { CollectModel } from '../collect.model.js'
