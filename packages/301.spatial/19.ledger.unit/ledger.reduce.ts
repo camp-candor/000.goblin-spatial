@@ -1,6 +1,6 @@
 import clone from 'clone-deep'
 import * as Act from './ledger.action'
-import { LedgerModel } from './ledger.model'
+import { LedgerModel } from './val/ledger.model.js'
 import * as Buzz from './ledger.buzzer'
 import State from '../99.core/state'
 
