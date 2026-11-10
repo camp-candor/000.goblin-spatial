@@ -1,167 +1,148 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest';
 import {
-    canonicalizeJCS,
-    createSpatialLedgerLogger,
-    verifyLedgerIntegrity,
-    computeGenesisHash
-} from '../19.ledger.unit/buz/ledger.buzz.js'
-import { SpatialAuditQuadruple } from '../19.ledger.unit/fce/ledger.interface.js'
-import { DEFAULT_KERNEL_VERSION } from '../19.ledger.unit/val/ledger.model.js'
+  canonicalizeJCS,
+  sha256Hex,
+  computeGenesisHash,
+  createSpatialLedgerLogger,
+  SpatialLedgerLogger,
+  verifyLedgerIntegrity
+} from '../19.ledger.unit/buz/ledger.buzz.js';
+import { SpatialLedgerEntry } from '../19.ledger.unit/fce/ledger.interface.js';
 
-describe('Deterministic Query Hash Chain Ledger Logger', () => {
+describe('Task 8.3 Deterministic Query Hash Chain Ledger Logger', () => {
+  let logger: SpatialLedgerLogger;
+  const streamId = 'episode_test_chamber_01';
 
-    describe('RFC 8785 JSON Canonicalization Scheme', () => {
-        it('should sort object keys lexicographically by UTF-16 code units', () => {
-            const obj = { z: 1, a: 2, '\u20AC': 3 };
-            // UTF-16: 'a' is 0x0061, 'z' is 0x007A, '\u20AC' is 0x20AC
-            const canonical = canonicalizeJCS(obj);
-            expect(canonical).toBe('{"a":2,"z":1,"\u20AC":3}');
-        });
+  beforeEach(() => {
+    logger = createSpatialLedgerLogger({ streamId });
+  });
 
-        it('should reject non-integer/float values like Infinity and NaN', () => {
-            expect(() => canonicalizeJCS(Infinity)).toThrow('NaN or Infinity not allowed in RFC 8785');
-            expect(() => canonicalizeJCS(NaN)).toThrow('NaN or Infinity not allowed in RFC 8785');
-        });
+  it('canonicalizes JSON payloads strictly in lexicographical key order (RFC 8785)', () => {
+    const unorderedObj = {
+      z_coord: 0,
+      a_name: 'test_node',
+      m_metadata: {
+        y_val: 200,
+        b_val: 100
+      }
+    };
 
-        it('should convert -0 to 0', () => {
-            expect(canonicalizeJCS(-0)).toBe('0');
-        });
-    });
+    const jcs = canonicalizeJCS(unorderedObj);
+    // Keys must appear in strict alphabetical order: a_name, m_metadata (b_val, y_val), z_coord
+    expect(jcs).toBe(
+      '{"a_name":"test_node","m_metadata":{"b_val":100,"y_val":200},"z_coord":0}'
+    );
+  });
 
-    describe('Cryptographic Hash-Chain Recurrence', () => {
-        it('should seed the chain root using computeGenesisHash', () => {
-            const streamId = 'stream-001';
-            const logger = createSpatialLedgerLogger({ streamId });
+  it('rejects floating-point non-integers during canonicalization', () => {
+    expect(() => canonicalizeJCS({ floatVal: 45.5 })).toThrow(TypeError);
+    expect(() => canonicalizeJCS({ nanVal: NaN })).toThrow(TypeError);
+    expect(() => canonicalizeJCS({ infVal: Infinity })).toThrow(TypeError);
+  });
 
-            expect(logger.getGenesisHash()).toBe(computeGenesisHash(streamId));
-            expect(logger.getHeadHash()).toBe(logger.getGenesisHash());
-        });
+  it('initializes genesis hash rooted in the streamId', () => {
+    const expectedGenesis = sha256Hex(`GOBLIN-SPATIAL-GENESIS::${streamId}`);
+    expect(logger.getGenesisHash()).toBe(expectedGenesis);
+    expect(logger.getHeadHash()).toBe(expectedGenesis);
+    expect(logger.getEntryCount()).toBe(0);
+  });
 
-        it('should compute monotonically incrementing sequence indices', () => {
-            const streamId = 'stream-002';
-            const logger = createSpatialLedgerLogger({ streamId });
+  it('appends spatial transactions and mints recursive SHA-256 hash chains', () => {
+    const query1 = { queryType: 'RAYCAST', origin: { q: 0, r: 0 }, target: { q: 1, r: 0 } };
+    const receipt1 = { isVisible: true, transmissionBps: 10000 };
 
-            const quadruple: SpatialAuditQuadruple = {
-                topologyHash: 'a'.repeat(64),
-                overlayHash: 'b'.repeat(64),
-                queryHash: 'c'.repeat(64),
-                receiptHash: 'd'.repeat(64)
-            };
+    const entry1 = logger.logTransaction(100, 'RAYCAST', query1, receipt1);
 
-            const entry1 = logger.appendEntry(1000, 'TEST_QUERY', quadruple);
-            expect(entry1.seq).toBe(1);
+    expect(entry1.sequenceNumber).toBe(1);
+    expect(entry1.occurredAtTick).toBe(100);
+    expect(entry1.previousEventHash).toBe(logger.getGenesisHash());
+    expect(entry1.eventHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(logger.getHeadHash()).toBe(entry1.eventHash);
 
-            const entry2 = logger.appendEntry(1010, 'TEST_QUERY', quadruple);
-            expect(entry2.seq).toBe(2);
-        });
+    const query2 = { queryType: 'ACOUSTIC', source: { q: 0, r: 0 }, intensity: 8500 };
+    const receipt2 = { isAudible: true, snrMarginCdb: 1200 };
 
-        it('should perform recursive SHA-256 hash chaining', () => {
-            const streamId = 'stream-003';
-            const logger = createSpatialLedgerLogger({ streamId });
+    const entry2 = logger.logTransaction(105, 'ACOUSTIC_WAVEFRONT', query2, receipt2);
 
-            const quadruple: SpatialAuditQuadruple = {
-                topologyHash: 'a'.repeat(64),
-                overlayHash: 'b'.repeat(64),
-                queryHash: 'c'.repeat(64),
-                receiptHash: 'd'.repeat(64)
-            };
+    expect(entry2.sequenceNumber).toBe(2);
+    expect(entry2.occurredAtTick).toBe(105);
+    expect(entry2.previousEventHash).toBe(entry1.eventHash);
+    expect(logger.getHeadHash()).toBe(entry2.eventHash);
+    expect(logger.getEntryCount()).toBe(2);
+  });
 
-            const entry1 = logger.appendEntry(1000, 'TEST_QUERY', quadruple);
-            expect(entry1.eventHash).toBeDefined();
-            expect(logger.getHeadHash()).toBe(entry1.eventHash);
+  it('verifies 100% hash chain integrity on un-tampered logs', () => {
+    logger.logTransaction(1, 'QUERY_A', { a: 1 }, { res: 10 });
+    logger.logTransaction(2, 'QUERY_B', { b: 2 }, { res: 20 });
+    logger.logTransaction(3, 'QUERY_C', { c: 3 }, { res: 30 });
 
-            const entry2 = logger.appendEntry(1010, 'TEST_QUERY', quadruple);
-            expect(entry2.eventHash).toBeDefined();
-            expect(logger.getHeadHash()).toBe(entry2.eventHash);
-            expect(entry1.eventHash).not.toBe(entry2.eventHash);
-        });
-    });
+    const audit = logger.verifyIntegrity();
+    expect(audit.valid).toBe(true);
+    expect(audit.totalEntries).toBe(3);
+    expect(audit.headHash).toBe(logger.getHeadHash());
+    expect(audit.error).toBeUndefined();
+  });
 
-    describe('Full-chain tamper detection and verification', () => {
-        it('should verify a valid hash chain', () => {
-            const streamId = 'stream-004';
-            const logger = createSpatialLedgerLogger({ streamId });
+  it('detects tampering and hash divergence when an entry payload is mutated', () => {
+    logger.logTransaction(1, 'STEP_1', { step: 1 }, { cost: 100 });
+    logger.logTransaction(2, 'STEP_2', { step: 2 }, { cost: 200 });
+    logger.logTransaction(3, 'STEP_3', { step: 3 }, { cost: 300 });
 
-            const quadruple: SpatialAuditQuadruple = {
-                topologyHash: 'a'.repeat(64),
-                overlayHash: 'b'.repeat(64),
-                queryHash: 'c'.repeat(64),
-                receiptHash: 'd'.repeat(64)
-            };
+    const entries = [...logger.getEntries()] as SpatialLedgerEntry[];
 
-            logger.appendEntry(1000, 'TEST_QUERY_1', quadruple);
-            logger.appendEntry(1010, 'TEST_QUERY_2', quadruple);
+    // Simulate tampering: retroactively mutate entry 2's queryHash
+    const tamperedEntry: SpatialLedgerEntry = {
+      ...entries[1],
+      auditQuadruple: {
+        ...entries[1].auditQuadruple,
+        queryHash: sha256Hex('FORGED_QUERY_DATA')
+      }
+    };
+    entries[1] = tamperedEntry;
 
-            const entries = logger.getEntries();
-            const result = verifyLedgerIntegrity([...entries], streamId);
-            expect(result.valid).toBe(true);
-        });
+    const audit = verifyLedgerIntegrity(entries, streamId);
+    expect(audit.valid).toBe(false);
+    expect(audit.brokenSequenceIndex).toBe(1);
+    expect(audit.error).toContain('BLOCK_HASH_DIVERGENCE');
+  });
 
-        it('should detect a mutated payload', () => {
-            const streamId = 'stream-005';
-            const logger = createSpatialLedgerLogger({ streamId });
+  it('detects sequence gap errors when an event is omitted', () => {
+    logger.logTransaction(1, 'STEP_1', { step: 1 }, { cost: 100 });
+    logger.logTransaction(2, 'STEP_2', { step: 2 }, { cost: 200 });
+    logger.logTransaction(3, 'STEP_3', { step: 3 }, { cost: 300 });
 
-            const quadruple: SpatialAuditQuadruple = {
-                topologyHash: 'a'.repeat(64),
-                overlayHash: 'b'.repeat(64),
-                queryHash: 'c'.repeat(64),
-                receiptHash: 'd'.repeat(64)
-            };
+    const entries = logger.getEntries();
+    // Drop entry 2 (seq 2)
+    const gappedEntries = [entries[0], entries[2]];
 
-            logger.appendEntry(1000, 'TEST_QUERY_1', quadruple);
-            logger.appendEntry(1010, 'TEST_QUERY_2', quadruple);
+    const audit = verifyLedgerIntegrity(gappedEntries, streamId);
+    expect(audit.valid).toBe(false);
+    expect(audit.brokenSequenceIndex).toBe(1);
+    expect(audit.error).toContain('SEQUENCE_GAP_DETECTED');
+  });
 
-            const entries = Array.from(logger.getEntries());
-            // Need to bypass deep freeze to mutate for testing tamper detection
-            const tamperedEntry = { ...entries[0], tick: 9999 };
-            entries[0] = tamperedEntry;
+  it('exports valid newline-delimited JSON (ndjson)', () => {
+    logger.logTransaction(1, 'TEST_A', { q: 1 }, { r: 1 });
+    logger.logTransaction(2, 'TEST_B', { q: 2 }, { r: 2 });
 
-            const result = verifyLedgerIntegrity(entries, streamId);
-            expect(result.valid).toBe(false);
-            expect(result.error).toMatch(/Hash mismatch/);
-        });
+    const ndjson = logger.exportNdjson();
+    const lines = ndjson.split('\n');
+    expect(lines.length).toBe(2);
 
-        it('should detect a sequence gap', () => {
-            const streamId = 'stream-006';
-            const logger = createSpatialLedgerLogger({ streamId });
+    const parsedFirst = JSON.parse(lines[0]);
+    expect(parsedFirst.sequenceNumber).toBe(1);
+    expect(parsedFirst.eventHash).toBe(logger.getEntries()[0].eventHash);
+  });
 
-            const quadruple: SpatialAuditQuadruple = {
-                topologyHash: 'a'.repeat(64),
-                overlayHash: 'b'.repeat(64),
-                queryHash: 'c'.repeat(64),
-                receiptHash: 'd'.repeat(64)
-            };
+  it('enforces deep-freeze runtime immutability on returned entries', () => {
+    const entry = logger.logTransaction(1, 'IMMUTABLE_TEST', { test: 1 }, { ok: true });
 
-            logger.appendEntry(1000, 'TEST_QUERY_1', quadruple);
-            logger.appendEntry(1010, 'TEST_QUERY_2', quadruple);
+    expect(Object.isFrozen(entry)).toBe(true);
+    expect(Object.isFrozen(entry.auditQuadruple)).toBe(true);
 
-            const entries = Array.from(logger.getEntries());
-            // Tamper with sequence number
-            const tamperedEntry = { ...entries[1], seq: 3 };
-            entries[1] = tamperedEntry;
-
-            const result = verifyLedgerIntegrity(entries, streamId);
-            expect(result.valid).toBe(false);
-            expect(result.error).toMatch(/Sequence gap detected/);
-        });
-    });
-
-    describe('Deep-freeze runtime immutability', () => {
-        it('should freeze the ledger entry and quadruple', () => {
-            const streamId = 'stream-007';
-            const logger = createSpatialLedgerLogger({ streamId });
-
-            const quadruple: SpatialAuditQuadruple = {
-                topologyHash: 'a'.repeat(64),
-                overlayHash: 'b'.repeat(64),
-                queryHash: 'c'.repeat(64),
-                receiptHash: 'd'.repeat(64)
-            };
-
-            const entry = logger.appendEntry(1000, 'TEST_QUERY', quadruple);
-
-            expect(Object.isFrozen(entry)).toBe(true);
-            expect(Object.isFrozen(entry.quadruple)).toBe(true);
-        });
-    });
+    expect(() => {
+      // @ts-expect-error - testing immutability
+      entry.sequenceNumber = 999;
+    }).toThrow(TypeError);
+  });
 });

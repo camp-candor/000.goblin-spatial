@@ -1,8 +1,18 @@
-import crypto from 'node:crypto'
-import { LedgerModel, DEFAULT_KERNEL_VERSION, GENESIS_PREFIX } from '../val/ledger.model.js'
-import LedgerBit from '../fce/ledger.bit.js'
-import State from '../../99.core/state.js'
-import { SpatialAuditQuadruple, SpatialLedgerEntry, HashChainVerificationResult, LedgerLoggerOptions } from '../fce/ledger.interface.js'
+import { createHash } from 'node:crypto';
+import {
+  HashChainVerificationResult,
+  LedgerLoggerOptions,
+  SpatialAuditQuadruple,
+  SpatialLedgerEntry
+} from '../fce/ledger.interface.js';
+import {
+  LedgerModel,
+  DEFAULT_KERNEL_VERSION,
+  GENESIS_PREFIX,
+  SpatialLedgerEntrySchema
+} from '../val/ledger.model.js';
+import LedgerBit from '../fce/ledger.bit.js';
+import State from '../../99.core/state.js';
 
 export const initLedger = (cpy: LedgerModel, bal: LedgerBit, ste: State) => {
     debugger
@@ -13,167 +23,273 @@ export const updateLedger = (cpy: LedgerModel, bal: LedgerBit, ste: State) => {
     return cpy
 }
 
-export function canonicalizeJCS(obj: any): string {
-    if (obj === null) return 'null';
-    if (typeof obj === 'boolean') return obj ? 'true' : 'false';
-    if (typeof obj === 'string') return JSON.stringify(obj);
-    if (typeof obj === 'number') {
-        if (!Number.isFinite(obj)) {
-            throw new Error('NaN or Infinity not allowed in RFC 8785');
-        }
-        if (Object.is(obj, -0)) return '0';
-        return JSON.stringify(obj);
+function deepFreeze<T>(obj: T): Readonly<T> {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  Object.freeze(obj);
+  for (const key of Object.keys(obj as object)) {
+    const value = (obj as Record<string, unknown>)[key];
+    if (value !== null && typeof value === 'object' && !Object.isFrozen(value)) {
+      deepFreeze(value);
     }
-    if (Array.isArray(obj)) {
-        return '[' + obj.map(item => canonicalizeJCS(item === undefined ? null : item)).join(',') + ']';
-    }
-    if (typeof obj === 'object') {
-        const keys = Object.keys(obj).sort((a, b) => {
-            const a16 = Buffer.from(a, 'utf16le');
-            const b16 = Buffer.from(b, 'utf16le');
-            return a16.compare(b16);
-        });
-        const keyValues = [];
-        for (const k of keys) {
-            if (obj[k] !== undefined) {
-                keyValues.push(JSON.stringify(k) + ':' + canonicalizeJCS(obj[k]));
-            }
-        }
-        return '{' + keyValues.join(',') + '}';
-    }
-    throw new Error('Unsupported type');
+  }
+  return obj as Readonly<T>;
 }
 
-export function sha256Hex(data: string): string {
-    return crypto.createHash('sha256').update(data).digest('hex');
+/**
+ * RFC 8785 JSON Canonicalization Scheme (JCS) Serializer.
+ * - Recursively sorts object keys lexicographically by UTF-16 code units.
+ * - Preserves array sequence order strictly.
+ * - Minifies whitespace outside strings.
+ * - Rejects floating-point non-integers, NaN, and Infinity.
+ */
+export function canonicalizeJCS(value: unknown): string {
+  if (value === null || typeof value !== 'object') {
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value) || !Number.isInteger(value)) {
+        throw new TypeError(`JCS_NON_INTEGER_OR_NON_FINITE: ${value}`);
+      }
+      return value.toString();
+    }
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    return '[' + value.map((item) => canonicalizeJCS(item)).join(',') + ']';
+  }
+
+  const record = value as Record<string, unknown>;
+  const sortedKeys = Object.keys(record).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+  const elements = sortedKeys.map(
+    (key) => `${JSON.stringify(key)}:${canonicalizeJCS(record[key])}`
+  );
+  return '{' + elements.join(',') + '}';
 }
 
+/**
+ * Computes lowercase 64-char SHA-256 digest of arbitrary UTF-8 string.
+ */
+export function sha256Hex(content: string): string {
+  return createHash('sha256').update(content, 'utf8').digest('hex');
+}
+
+/**
+ * Computes deterministic genesis root hash for a given streamId:
+ * H_0 = SHA-256("GOBLIN-SPATIAL-GENESIS::" || streamId)
+ */
 export function computeGenesisHash(streamId: string): string {
-    return sha256Hex(`${GENESIS_PREFIX}${streamId}`);
+  return sha256Hex(`${GENESIS_PREFIX}${streamId}`);
 }
 
+/**
+ * Mints recursive SHA-256 block hash for an entry:
+ * H_n = SHA-256(H_{n-1} || "::" || seq || "::" || tick || "::" || streamId || "::" || queryType || "::" || CanonicalJCS(quadruple) || "::" || kernelVersion)
+ */
 export function mintEntryHash(
-    prevHash: string,
-    seq: number,
-    tick: number,
-    streamId: string,
-    queryType: string,
-    quadruple: SpatialAuditQuadruple,
-    kernelVersion: string
+  previousHash: string,
+  sequenceNumber: number,
+  occurredAtTick: number,
+  streamId: string,
+  queryType: string,
+  auditQuadruple: SpatialAuditQuadruple,
+  kernelVersion: string
 ): string {
-    return sha256Hex(
-        prevHash +
-        seq.toString() +
-        tick.toString() +
-        streamId +
-        queryType +
-        canonicalizeJCS(quadruple) +
-        kernelVersion
-    );
+  const quadrupleJCS = canonicalizeJCS(auditQuadruple);
+  const hashPayload = [
+    previousHash,
+    sequenceNumber.toString(),
+    occurredAtTick.toString(),
+    streamId,
+    queryType,
+    quadrupleJCS,
+    kernelVersion
+  ].join('::');
+
+  return sha256Hex(hashPayload);
 }
 
 export class SpatialLedgerLogger {
-    private streamId: string;
-    private kernelVersion: string;
-    private headHash: string;
-    private entries: SpatialLedgerEntry[] = [];
-    private seqCounter: number = 0;
+  private readonly streamId: string;
+  private readonly kernelVersion: string;
+  private readonly genesisHash: string;
+  private currentHeadHash: string;
+  private sequenceCounter: number;
+  private readonly entries: SpatialLedgerEntry[] = [];
 
-    constructor(options: LedgerLoggerOptions) {
-        this.streamId = options.streamId;
-        this.kernelVersion = options.kernelVersion || DEFAULT_KERNEL_VERSION;
-        this.headHash = computeGenesisHash(this.streamId);
-    }
+  constructor(options: LedgerLoggerOptions) {
+    this.streamId = options.streamId;
+    this.kernelVersion = options.kernelVersion ?? DEFAULT_KERNEL_VERSION;
+    this.genesisHash = computeGenesisHash(this.streamId);
+    this.currentHeadHash = this.genesisHash;
+    this.sequenceCounter = 0;
+  }
 
-    public getGenesisHash(): string {
-        return computeGenesisHash(this.streamId);
-    }
+  public getStreamId(): string {
+    return this.streamId;
+  }
 
-    public getHeadHash(): string {
-        return this.headHash;
-    }
+  public getHeadHash(): string {
+    return this.currentHeadHash;
+  }
 
-    public getEntries(): readonly SpatialLedgerEntry[] {
-        return this.entries;
-    }
+  public getGenesisHash(): string {
+    return this.genesisHash;
+  }
 
-    public appendEntry(
-        tick: number,
-        queryType: string,
-        quadruple: SpatialAuditQuadruple
-    ): SpatialLedgerEntry {
-        this.seqCounter++;
-        const eventHash = mintEntryHash(
-            this.headHash,
-            this.seqCounter,
-            tick,
-            this.streamId,
-            queryType,
-            quadruple,
-            this.kernelVersion
-        );
+  public getEntryCount(): number {
+    return this.entries.length;
+  }
 
-        const entry: SpatialLedgerEntry = {
-            seq: this.seqCounter,
-            tick,
-            streamId: this.streamId,
-            queryType,
-            quadruple,
-            kernelVersion: this.kernelVersion,
-            eventHash
-        };
+  public getEntries(): readonly SpatialLedgerEntry[] {
+    return this.entries;
+  }
 
-        Object.freeze(entry.quadruple);
-        Object.freeze(entry);
+  /**
+   * Appends a new verified spatial transaction into the immutable Merkle chain.
+   */
+  public logTransaction(
+    occurredAtTick: number,
+    queryType: string,
+    rawQuery: unknown,
+    rawReceipt: unknown,
+    contextHashes?: { topologyHash?: string; overlayHash?: string }
+  ): SpatialLedgerEntry {
+    this.sequenceCounter++;
+    const sequenceNumber = this.sequenceCounter;
 
-        this.entries.push(entry);
-        this.headHash = eventHash;
-        return entry;
-    }
+    const queryJCS = canonicalizeJCS(rawQuery);
+    const receiptJCS = canonicalizeJCS(rawReceipt);
+
+    const queryHash = sha256Hex(queryJCS);
+    const receiptHash = sha256Hex(receiptJCS);
+
+    const topologyHash =
+      contextHashes?.topologyHash ?? sha256Hex('TOPOLOGY_DEFAULT_CANONICAL');
+    const overlayHash =
+      contextHashes?.overlayHash ?? sha256Hex('OVERLAY_EMPTY_IDENTITY');
+
+    const auditQuadruple: SpatialAuditQuadruple = {
+      topologyHash,
+      overlayHash,
+      queryHash,
+      receiptHash
+    };
+
+    const previousEventHash = this.currentHeadHash;
+    const eventHash = mintEntryHash(
+      previousEventHash,
+      sequenceNumber,
+      occurredAtTick,
+      this.streamId,
+      queryType,
+      auditQuadruple,
+      this.kernelVersion
+    );
+
+    const entryCandidate: SpatialLedgerEntry = {
+      sequenceNumber,
+      occurredAtTick,
+      streamId: this.streamId,
+      queryType,
+      auditQuadruple,
+      kernelVersion: this.kernelVersion,
+      previousEventHash,
+      eventHash
+    };
+
+    const parsedEntry = SpatialLedgerEntrySchema.parse(entryCandidate);
+    const sealedEntry = deepFreeze(parsedEntry) as SpatialLedgerEntry;
+
+    this.entries.push(sealedEntry);
+    this.currentHeadHash = eventHash;
+
+    return sealedEntry;
+  }
+
+  /**
+   * Audits the entire internal hash chain from genesis to head.
+   */
+  public verifyIntegrity(): HashChainVerificationResult {
+    return verifyLedgerIntegrity(this.entries, this.streamId);
+  }
+
+  /**
+   * Exports the ledger entries as Newline-Delimited JSON (.ndjson).
+   */
+  public exportNdjson(): string {
+    return this.entries.map((e) => JSON.stringify(e)).join('\n');
+  }
 }
 
-export function createSpatialLedgerLogger(options: LedgerLoggerOptions): SpatialLedgerLogger {
-    return new SpatialLedgerLogger(options);
-}
+/**
+ * Verifies any arbitrary sequence of ledger entries against genesis and RFC 8785 chaining rules.
+ */
+export function verifyLedgerIntegrity(
+  entries: readonly SpatialLedgerEntry[],
+  streamId: string
+): HashChainVerificationResult {
+  const genesisHash = computeGenesisHash(streamId);
+  let expectedPrevHash = genesisHash;
 
-export function verifyLedgerIntegrity(entries: SpatialLedgerEntry[], streamId: string): HashChainVerificationResult {
-    if (entries.length === 0) return { valid: true };
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const expectedSeq = i + 1;
 
-    let currentHash = computeGenesisHash(streamId);
-    let expectedSeq = 1;
-
-    for (let i = 0; i < entries.length; i++) {
-        const entry = entries[i];
-
-        if (entry.seq !== expectedSeq) {
-            return {
-                valid: false,
-                error: `Sequence gap detected at index ${i}`,
-                invalidSequenceIdx: i
-            };
-        }
-
-        const expectedHash = mintEntryHash(
-            currentHash,
-            entry.seq,
-            entry.tick,
-            entry.streamId,
-            entry.queryType,
-            entry.quadruple,
-            entry.kernelVersion
-        );
-
-        if (entry.eventHash !== expectedHash) {
-            return {
-                valid: false,
-                error: `Hash mismatch at sequence ${entry.seq}`,
-                invalidSequenceIdx: i
-            };
-        }
-
-        currentHash = entry.eventHash;
-        expectedSeq++;
+    if (entry.sequenceNumber !== expectedSeq) {
+      return {
+        valid: false,
+        totalEntries: entries.length,
+        genesisHash,
+        headHash: expectedPrevHash,
+        brokenSequenceIndex: i,
+        error: `SEQUENCE_GAP_DETECTED: Expected seq ${expectedSeq}, got ${entry.sequenceNumber}`
+      };
     }
 
-    return { valid: true };
+    if (entry.previousEventHash !== expectedPrevHash) {
+      return {
+        valid: false,
+        totalEntries: entries.length,
+        genesisHash,
+        headHash: expectedPrevHash,
+        brokenSequenceIndex: i,
+        error: `PREVIOUS_HASH_MISMATCH: Entry ${entry.sequenceNumber} declared prev ${entry.previousEventHash}, expected ${expectedPrevHash}`
+      };
+    }
+
+    const recalculatedHash = mintEntryHash(
+      entry.previousEventHash,
+      entry.sequenceNumber,
+      entry.occurredAtTick,
+      entry.streamId,
+      entry.queryType,
+      entry.auditQuadruple,
+      entry.kernelVersion
+    );
+
+    if (entry.eventHash !== recalculatedHash) {
+      return {
+        valid: false,
+        totalEntries: entries.length,
+        genesisHash,
+        headHash: expectedPrevHash,
+        brokenSequenceIndex: i,
+        error: `BLOCK_HASH_DIVERGENCE: Entry ${entry.sequenceNumber} hash ${entry.eventHash} != computed ${recalculatedHash}`
+      };
+    }
+
+    expectedPrevHash = entry.eventHash;
+  }
+
+  return {
+    valid: true,
+    totalEntries: entries.length,
+    genesisHash,
+    headHash: expectedPrevHash
+  };
 }
+
+export const createSpatialLedgerLogger = (
+  options: LedgerLoggerOptions
+): SpatialLedgerLogger => new SpatialLedgerLogger(options);
