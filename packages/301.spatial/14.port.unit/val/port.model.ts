@@ -8,6 +8,7 @@ export const StrictAxialCoordSchema = z
     .object({
         q: z.number().int({ message: 'COORD_Q_MUST_BE_INTEGER' }),
         r: z.number().int({ message: 'COORD_R_MUST_BE_INTEGER' }),
+        s: z.number().int().optional(),
     })
     .strict()
 
