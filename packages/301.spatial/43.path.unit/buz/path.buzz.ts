@@ -3,14 +3,90 @@ import {
     PackedAxial,
     packAxial,
     unpackAxial,
+    COORD_OFFSET,
 } from '../../28.axial.unit/val/axial.model.js'
-import { axialDistance } from '../../28.axial.unit/buz/axial.buzz.js'
+import {
+    axialDistance,
+    axialToDoubled,
+} from '../../28.axial.unit/buz/axial.buzz.js'
 import { AXIAL_DIRECTIONS } from '../../46.neighbor.unit/buz/neighbor.buzz.js'
 import { DynamicOverlay } from '../../38.types.unit/fce/manifest.schema.js'
 import {
     compareTieBreakNodes,
     TieBreakNode,
 } from '../../25.distance.unit/buz/distance.buzz.js'
+
+class MinHeap<T> {
+    private heap: T[] = []
+    constructor(private compare: (a: T, b: T) => number) {}
+
+    get size(): number {
+        return this.heap.length
+    }
+
+    push(item: T): void {
+        this.heap.push(item)
+        this.bubbleUp(this.heap.length - 1)
+    }
+
+    pop(): T | undefined {
+        if (this.heap.length === 0) return undefined
+        const top = this.heap[0]
+        const bottom = this.heap.pop()!
+        if (this.heap.length > 0) {
+            this.heap[0] = bottom
+            this.sinkDown(0)
+        }
+        return top
+    }
+
+    private bubbleUp(idx: number): void {
+        const item = this.heap[idx]
+        while (idx > 0) {
+            const parentIdx = (idx - 1) >> 1
+            const parent = this.heap[parentIdx]
+            if (this.compare(item, parent) < 0) {
+                this.heap[idx] = parent
+                idx = parentIdx
+            } else {
+                break
+            }
+        }
+        this.heap[idx] = item
+    }
+
+    private sinkDown(idx: number): void {
+        const length = this.heap.length
+        const item = this.heap[idx]
+        while (true) {
+            const leftIdx = (idx << 1) + 1
+            const rightIdx = leftIdx + 1
+            let swapIdx = -1
+
+            if (leftIdx < length) {
+                if (this.compare(this.heap[leftIdx], item) < 0) {
+                    swapIdx = leftIdx
+                }
+            }
+
+            if (rightIdx < length) {
+                if (
+                    this.compare(
+                        this.heap[rightIdx],
+                        swapIdx === -1 ? item : this.heap[leftIdx],
+                    ) < 0
+                ) {
+                    swapIdx = rightIdx
+                }
+            }
+
+            if (swapIdx === -1) break
+            this.heap[idx] = this.heap[swapIdx]
+            idx = swapIdx
+        }
+        this.heap[idx] = item
+    }
+}
 
 export interface PathQueryOptions {
     readonly origin: AxialCoord
@@ -62,23 +138,40 @@ export function findShortestBoundedPath(
         }
     }
 
+    const destQ = query.destination.q
+    const destR = query.destination.r
+    const destS = query.destination.s
+    const destDoubled = axialToDoubled(query.destination)
+
     const gScore = new Map<PackedAxial, number>()
     const parent = new Map<PackedAxial, PackedAxial>()
-    const queue: TieBreakNode[] = []
+    const queue = new MinHeap<TieBreakNode>((a, b) =>
+        compareTieBreakNodes(a, b, query.destination),
+    )
 
     gScore.set(originPacked, 0)
-    const initialH = axialDistance(query.origin, query.destination) * 100
+    const dq0 = Math.abs(query.origin.q - destQ)
+    const dr0 = Math.abs(query.origin.r - destR)
+    const ds0 = Math.abs(query.origin.s - destS)
+    const initialH = Math.max(dq0, dr0, ds0) * 100
+
+    const origDoubled = axialToDoubled(query.origin)
+    const dx0 = origDoubled.x - destDoubled.x
+    const dy0 = origDoubled.y - destDoubled.y
+    const chordSq0 = dx0 * dx0 + dy0 * dy0
+
     queue.push({
         cell: originPacked,
         fScore: initialH,
         gScore: 0,
         hScore: initialH,
         seedDigest: (query.episodeSeed ?? 0) ^ originPacked,
+        chordSq: chordSq0,
     })
 
     let steps = 0
 
-    while (queue.length > 0) {
+    while (queue.size > 0) {
         steps++
         if (steps > envelopeLimit) {
             return {
@@ -88,8 +181,7 @@ export function findShortestBoundedPath(
             }
         }
 
-        queue.sort((a, b) => compareTieBreakNodes(a, b, query.destination))
-        const current = queue.shift()!
+        const current = queue.pop()!
 
         if (current.cell === destPacked) {
             const pathPacked: PackedAxial[] = []
@@ -111,13 +203,18 @@ export function findShortestBoundedPath(
             }
         }
 
-        const currentCoord = unpackAxial(current.cell)
+        const u32 = current.cell >>> 0
+        const currentQ = ((u32 >>> 16) & 0xffff) - COORD_OFFSET
+        const currentR = (u32 & 0xffff) - COORD_OFFSET
 
         for (let i = 0; i < 6; i++) {
             const dir = AXIAL_DIRECTIONS[i]
-            const neighborQ = currentCoord.q + dir.q
-            const neighborR = currentCoord.r + dir.r
-            const neighborPacked = packAxial(neighborQ, neighborR)
+            const neighborQ = currentQ + dir.q
+            const neighborR = currentR + dir.r
+            const qOffset = (neighborQ + COORD_OFFSET) & 0xffff
+            const rOffset = (neighborR + COORD_OFFSET) & 0xffff
+            const neighborPacked = (((qOffset << 16) | rOffset) >>>
+                0) as PackedAxial
 
             if (blocked.has(neighborPacked)) {
                 continue
@@ -135,14 +232,24 @@ export function findShortestBoundedPath(
                 gScore.set(neighborPacked, tentativeG)
                 parent.set(neighborPacked, current.cell)
 
-                const neighborCoord = unpackAxial(neighborPacked)
-                const h = axialDistance(neighborCoord, query.destination) * 100
+                const dq = Math.abs(neighborQ - destQ)
+                const dr = Math.abs(neighborR - destR)
+                const ds = Math.abs(-neighborQ - neighborR - destS)
+                const h = Math.max(dq, dr, ds) * 100
+
+                const nx = 4 * neighborQ + 2 * neighborR
+                const ny = 6 * neighborR
+                const dx = nx - destDoubled.x
+                const dy = ny - destDoubled.y
+                const chordSq = dx * dx + dy * dy
+
                 queue.push({
                     cell: neighborPacked,
                     fScore: tentativeG + h,
                     gScore: tentativeG,
                     hScore: h,
                     seedDigest: (query.episodeSeed ?? 0) ^ neighborPacked,
+                    chordSq,
                 })
             }
         }

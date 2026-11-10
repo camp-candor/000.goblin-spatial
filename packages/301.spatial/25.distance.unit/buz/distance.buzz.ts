@@ -11,6 +11,7 @@ export interface TieBreakNode {
     readonly gScore: number
     readonly hScore: number
     readonly seedDigest: number
+    readonly chordSq?: bigint | number
 }
 
 /**
@@ -29,7 +30,11 @@ export function compareTieBreakNodes(
         return a.fScore - b.fScore
     }
 
-    if (targetCoord !== undefined) {
+    if (a.chordSq !== undefined && b.chordSq !== undefined) {
+        if (a.chordSq !== b.chordSq) {
+            return a.chordSq < b.chordSq ? -1 : 1
+        }
+    } else if (targetCoord !== undefined) {
         const coordA = unpackAxial(a.cell)
         const coordB = unpackAxial(b.cell)
         const chordSqA = chordDistanceSquared(coordA, targetCoord)
