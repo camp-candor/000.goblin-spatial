@@ -127,7 +127,7 @@ describe('Task 8.5 Multi-Query Batch Aggregator', () => {
         expect(resA.summary.batchAuditHash).toBe(resB.summary.batchAuditHash)
     })
 
-    it('satisfies high-throughput benchmark: batch of 200 collocated queries in < 5.0ms', () => {
+    it('satisfies high-throughput benchmark: batch of 200 collocated queries in < 75ms', () => {
         const queries: Record<string, unknown> = {}
         for (let i = 0; i < 200; i++) {
             queries[`query_${i.toString().padStart(3, '0')}`] = {
@@ -150,7 +150,10 @@ describe('Task 8.5 Multi-Query Batch Aggregator', () => {
 
         expect(result.summary.totalQueries).toBe(200)
         expect(result.summary.succeededCount).toBe(200)
-        expect(elapsedMs).toBeLessThan(150.0)
+        // Honest ceiling set by owner directive: 200 x ~60us mandated pipeline
+        // work floors at ~12ms for the loop alone; measured 24-29ms standalone,
+        // higher under parallel-suite load. 75ms keeps a real regression tripwire.
+        expect(elapsedMs).toBeLessThan(75.0)
     })
 
     it('executes homogeneous raycast batches and returns typed PerceptCandidate receipts', () => {

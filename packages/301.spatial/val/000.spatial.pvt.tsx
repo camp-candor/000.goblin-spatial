@@ -7,6 +7,7 @@ import { createLoSVisualizerAction } from '../98.menu.unit/buz/03.los-menu.buzz.
 import { createSoundPropagationAction } from '../98.menu.unit/buz/04.sound-menu.buzz.js'
 import { createPathSimulationAction } from '../98.menu.unit/buz/05.path-menu.buzz.js'
 import { createDisplacementAction } from '../98.menu.unit/buz/06.displacement-menu.buzz.js'
+import { createReceiptVerificationAction } from '../98.menu.unit/buz/07.receipt-menu.buzz.js'
 
 export interface CockpitInstance {
     readonly bus: ReturnType<typeof createSpatialBus>
@@ -30,6 +31,7 @@ export function initializeCockpitHarness(): CockpitInstance {
     menu.registerAction(createSoundPropagationAction())
     menu.registerAction(createPathSimulationAction())
     menu.registerAction(createDisplacementAction())
+    menu.registerAction(createReceiptVerificationAction())
 
     const unsubLogs = bus.subscribe('TELEMETRY_LOG', (evt) => {
         const msg = String(evt.payload.message || '')
@@ -62,7 +64,7 @@ export function initializeCockpitHarness(): CockpitInstance {
 
         return [
             '+--------------------------------------------------------------------------+',
-            '| 000.goblin-spatial :: BLESSED TERMINAL COCKPIT (Phase 7)                |',
+            '| 000.goblin-spatial :: BLESSED TERMINAL COCKPIT (Phase 8)                |',
             '+--------------------------------------------------------------------------+',
             '| MENU CONTROLS (Columns 0-4, Rows 0-12)                                   |',
             actionLines,

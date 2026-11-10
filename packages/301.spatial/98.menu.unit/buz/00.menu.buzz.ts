@@ -19,6 +19,8 @@ import { createTopologyLoaderAction } from './02.topology-menu.buzz.js'
 import { createLoSVisualizerAction } from './03.los-menu.buzz.js'
 import { createSoundPropagationAction } from './04.sound-menu.buzz.js'
 import { createPathSimulationAction } from './05.path-menu.buzz.js'
+import { createDisplacementAction } from './06.displacement-menu.buzz.js'
+import { createReceiptVerificationAction } from './07.receipt-menu.buzz.js'
 import { TopologyDatabase } from '../../07.database.unit/buz/database.buzz.js'
 import {
     AxialCoord,
@@ -81,6 +83,8 @@ const ensureLiveCockpit = () => {
     menu.registerAction(createLoSVisualizerAction())
     menu.registerAction(createSoundPropagationAction())
     menu.registerAction(createPathSimulationAction())
+    menu.registerAction(createDisplacementAction())
+    menu.registerAction(createReceiptVerificationAction())
 
     liveCockpit = { bus, menu }
     return liveCockpit

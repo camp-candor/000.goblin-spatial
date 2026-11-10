@@ -51,6 +51,9 @@ function deepFreeze<T>(obj: T): Readonly<T> {
     if (obj === null || typeof obj !== 'object') {
         return obj
     }
+    if (Object.isFrozen(obj)) {
+        return obj as Readonly<T>
+    }
     Object.freeze(obj)
     for (const key of Object.keys(obj as object)) {
         const value = (obj as Record<string, unknown>)[key]
