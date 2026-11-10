@@ -1,28 +1,28 @@
-1. **Create `packages/301.spatial/98.menu.unit/buz/03.los-menu.buzz.ts`:**
-    - Use `write_file` to create the action file exporting `createLoSVisualizerAction()`.
-    - Inside, implement `execute` integrating `traceFiniteSupercover` (from `41.segment.unit`), `evaluateRayVertexCrossings` (from `17.observer.unit`), and `computeOpticalTransmission` (from `40.witness.unit`).
-    - The action evaluates a raycast from `(0, -2)` to `(0, 2)`. It formats a tactical 7-bit ASCII hex grid (Radius 3) with `[O]`, `[T]`, `[*]`, `[X]`, and `[#]`, tracking cell blockages, and emits telemetry and an `ASCII_FRAME_RENDER` event.
-2. **Verify `03.los-menu.buzz.ts`:**
-    - Use `read_file` to verify the content.
-3. **Update `packages/301.spatial/val/000.spatial.pvt.tsx`:**
-    - Use `replace_with_git_merge_diff` to add the new action to the cockpit harness and subscribe to `ASCII_FRAME_RENDER`.
-4. **Verify `000.spatial.pvt.tsx`:**
-    - Use `read_file` to verify the changes.
-5. **Create `packages/301.spatial/test/los-menu.test.ts`:**
-    - Use `write_file` to add a test suite that checks the catalog action registration, 7-bit ASCII tactical lattice rendering, 2ms execution profiling, and interactive cockpit telemetry frame updates.
-6. **Verify `los-menu.test.ts`:**
-    - Use `read_file` to verify the content.
-7. **Perform zero-float, 7-bit ASCII and cleanroom scans:**
-    - Use `run_in_bash_session` to execute `find packages/301.spatial -name "*.js" -o -name "*.d.ts"`, verify 0 float math usage, and check for absence of multi-byte UTF-8 emojis.
-8. **Test execution and boundary check:**
-    - Execute `npx vitest run packages/301.spatial/test/los-menu.test.ts`.
-    - Run `npm run check:boundary`.
-9. **Run workspace-wide tests:**
-    - Execute `npm run test` using `run_in_bash_session` to verify no regressions.
-10. **Update Progress Checkbox:**
-    - Use `run_in_bash_session` to read and update `data/directive/day-002/016.phase-eight.jules.md`.
-    - Update progress status to `[🟢 Complete - <Date>]` and append the explicit halt statement if checks pass.
-11. **Pre-commit step:**
-    - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
-12. **Submit changes:**
-    - Submit the workspace.
+1. **Define Ledger Models**:
+   - Run a bash script to overwrite `packages/301.spatial/19.ledger.unit/val/ledger.model.ts` with Zod schemas for `Sha256HashSchema`, `SpatialAuditQuadrupleSchema`, and `SpatialLedgerEntrySchema`, enforcing `.strict()` and zero-float invariants. Includes constants `DEFAULT_KERNEL_VERSION` ("0.1.0") and `GENESIS_PREFIX` ("GOBLIN-SPATIAL-GENESIS::").
+
+2. **Define Ledger Interfaces**:
+   - Run a bash script to write `packages/301.spatial/19.ledger.unit/fce/ledger.interface.ts` with TypeScript definitions for `SpatialAuditQuadruple`, `SpatialLedgerEntry`, `HashChainVerificationResult`, and `LedgerLoggerOptions`, preserving ESM imports if needed.
+
+3. **Implement Ledger Business Logic**:
+   - Run a bash script to overwrite `packages/301.spatial/19.ledger.unit/buz/ledger.buzz.ts`. This file will use `node:crypto` to implement `canonicalizeJCS` (rejecting floats), `sha256Hex`, `computeGenesisHash`, `mintEntryHash`, and `SpatialLedgerLogger` class along with `verifyLedgerIntegrity` method. Existing initialization exports (`initLedger`, `updateLedger`) will be retained.
+
+4. **Implement Unit Tests**:
+   - Run a bash script to write `packages/301.spatial/test/ledger.test.ts`. Tests will cover RFC 8785 lexicographical key sorting, float rejection, hash chain verification, `.ndjson` export, and deep freezing.
+
+5. **Verify Implementation Files**:
+   - Run `cat` on `ledger.model.ts`, `ledger.interface.ts`, `ledger.buzz.ts`, and `ledger.test.ts` to confirm correct file generation and contents.
+
+6. **Execute Verification Checks**:
+   - Run `npm run test` for the workspace to ensure tests pass.
+   - Run `npx vitest run packages/301.spatial/test/ledger.test.ts` directly.
+   - Run static analysis commands for pure 7-bit ASCII compliance: `git diff HEAD -- packages/301.spatial/19.ledger.unit/ packages/301.spatial/test/ledger.test.ts | grep -P "[^\x00-\x7F]"`.
+   - Run static scan for Zero-Float AST: `grep -En "Math\.(sin|cos|sqrt|round)" packages/301.spatial/19.ledger.unit/`.
+   - Run pure Zod architecture check: `grep -rn "@sinclair/typebox" packages/301.spatial/19.ledger.unit/`.
+
+7. **Pre-commit**:
+   - Complete pre-commit steps to ensure proper testing, verification, review, and reflection are done.
+
+8. **Finalize**:
+   - Use `sed` or bash to update `data/directive/day-002/028.phase-fourteen.jules.md` to `[🟢 Complete - <Date>]` and append the halt statement.
+   - Run the submit tool.

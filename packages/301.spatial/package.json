@@ -20,5 +20,9 @@
     },
     "scripts": {
         "test": "vitest run"
+    },
+    "devDependencies": {
+        "vitest": "3.2.4",
+        "zod": "3.25.76"
     }
 }
