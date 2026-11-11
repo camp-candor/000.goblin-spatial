@@ -1,31 +1,42 @@
-import { z } from 'zod'
-import Ledger from '../fce/ledger.interface.js'
-import LedgerBit from '../fce/ledger.interface.js'
+import { z } from 'zod';
 
-export const DEFAULT_KERNEL_VERSION = "0.1.0"
-export const GENESIS_PREFIX = "GOBLIN-SPATIAL-GENESIS::"
+export const GENESIS_HASH_64 = '0'.repeat(64);
 
-export const Sha256HashSchema: z.ZodType<string> = z.string().regex(/^[a-f0-9]{64}$/)
+export const Sha256HashSchema = z
+  .string()
+  .length(64, { message: '[HASH_LENGTH_BREACH] SHA-256 hash must be exactly 64 characters' })
+  .regex(/^[a-f0-9]{64}$/, {
+    message: '[HASH_FORMAT_BREACH] SHA-256 hash must be lowercase hexadecimal',
+  });
 
-export const SpatialAuditQuadrupleSchema: z.ZodType<any> = z.object({
+export const SpatialAuditQuadrupleSchema = z
+  .object({
     topologyHash: Sha256HashSchema,
     overlayHash: Sha256HashSchema,
     queryHash: Sha256HashSchema,
     receiptHash: Sha256HashSchema,
-}).strict()
+  })
+  .strict();
 
-export const SpatialLedgerEntrySchema: z.ZodType<any> = z.object({
-    seq: z.number().int().nonnegative(),
-    tick: z.number().int().nonnegative(),
-    streamId: z.string(),
-    queryType: z.string(),
-    quadruple: SpatialAuditQuadrupleSchema,
-    kernelVersion: z.string(),
-    eventHash: Sha256HashSchema,
-}).strict()
+export const SpatialLedgerEntrySchema = z
+  .object({
+    sequenceNumber: z
+      .number()
+      .int({ message: '[FLOAT_PROHIBITED] sequenceNumber must be an integer' })
+      .positive({ message: '[SEQUENCE_INVALID] sequenceNumber must be positive' }),
+    tickNumber: z
+      .number()
+      .int({ message: '[FLOAT_PROHIBITED] tickNumber must be an integer' })
+      .nonnegative({ message: '[TICK_INVALID] tickNumber cannot be negative' }),
+    streamId: z.string().min(1, { message: '[STREAM_ID_EMPTY] streamId cannot be empty' }),
+    queryType: z.enum(['RAYCAST', 'BOUNDED_PATH', 'REACHABILITY', 'DISPLACEMENT']),
+    auditQuadruple: SpatialAuditQuadrupleSchema,
+    kernelVersion: z.string().min(1),
+    prevEventHash: Sha256HashSchema,
+    chainedEventHash: Sha256HashSchema,
+    recordedAtMs: z.number().int().nonnegative(),
+  })
+  .strict();
 
-export class LedgerModel implements Ledger {
-    //idx:string;
-    //ledgerBitList: LedgerBit[] = [];
-    //ledgerBits: any = {};
-}
+export type ValidatedSpatialAuditQuadruple = z.infer<typeof SpatialAuditQuadrupleSchema>;
+export type ValidatedSpatialLedgerEntry = z.infer<typeof SpatialLedgerEntrySchema>;

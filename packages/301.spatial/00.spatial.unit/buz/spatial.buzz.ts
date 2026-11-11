@@ -1,3 +1,4 @@
+import { LedgerModel } from '../../19.ledger.unit/ledger.model.js';
 import {
     PureSpatialKernel,
     SpatialExecutionContext,
@@ -36,10 +37,11 @@ import {
 import { createCapacityEvaluator } from '../../51.capacity.unit/buz/capacity.buzz.js'
 import { createOccupancyTracker } from '../../44.occupancy.unit/buz/occupancy.buzz.js'
 import {
-    canonicalizeJCS,
-    createSpatialLedgerLogger,
-    sha256Hex,
-    SpatialLedgerLogger,
+    canonicalizeJson,
+    initLedger,
+    appendEntry,
+    computeSha256Hex,
+
 } from '../../19.ledger.unit/buz/ledger.buzz.js'
 import {
     SpatialAuditQuadruple,
@@ -87,7 +89,7 @@ export class SpatialKernelInvoker implements PureSpatialKernel {
     public readonly kernelVersion: string
     private readonly defaultTopologyHash: string
     private readonly defaultOverlayHash: string
-    private readonly ledgerLoggers = new Map<string, SpatialLedgerLogger>()
+    private readonly ledgerLoggers = new Map<string, LedgerModel>()
 
     constructor(options?: {
         kernelVersion?: string
@@ -97,10 +99,10 @@ export class SpatialKernelInvoker implements PureSpatialKernel {
         this.kernelVersion = options?.kernelVersion ?? DEFAULT_KERNEL_VERSION
         this.defaultTopologyHash =
             options?.defaultTopologyHash ??
-            sha256Hex('CANONICAL_TOPOLOGY_ROOT_DEFAULT')
+            computeSha256Hex('CANONICAL_TOPOLOGY_ROOT_DEFAULT')
         this.defaultOverlayHash =
             options?.defaultOverlayHash ??
-            sha256Hex('EMPTY_DYNAMIC_OVERLAY_DEFAULT')
+            computeSha256Hex('EMPTY_DYNAMIC_OVERLAY_DEFAULT')
     }
 
     public executeRaycast(
@@ -223,8 +225,8 @@ export class SpatialKernelInvoker implements PureSpatialKernel {
             const errQuadruple: SpatialAuditQuadruple = {
                 topologyHash: context?.topologyHash ?? this.defaultTopologyHash,
                 overlayHash: context?.overlayHash ?? this.defaultOverlayHash,
-                queryHash: sha256Hex(JSON.stringify(rawQuery ?? null)),
-                receiptHash: sha256Hex('REJECTED_QUERY_INGRESS'),
+                queryHash: computeSha256Hex(JSON.stringify(rawQuery ?? null)),
+                receiptHash: computeSha256Hex('REJECTED_QUERY_INGRESS'),
             }
 
             return deepFreeze({
@@ -269,8 +271,8 @@ export class SpatialKernelInvoker implements PureSpatialKernel {
         // 3. Cryptographic Provenance & Quadruple Generation
         const topologyHash = context?.topologyHash ?? this.defaultTopologyHash
         const overlayHash = context?.overlayHash ?? this.defaultOverlayHash
-        const queryHash = sha256Hex(canonicalizeJCS(query))
-        const receiptHash = sha256Hex(canonicalizeJCS(resultPayload))
+        const queryHash = computeSha256Hex(canonicalizeJson(query))
+        const receiptHash = computeSha256Hex(canonicalizeJson(resultPayload))
 
         const auditQuadruple: SpatialAuditQuadruple = {
             topologyHash,
@@ -284,17 +286,19 @@ export class SpatialKernelInvoker implements PureSpatialKernel {
         if (context?.recordLedger && context.streamId) {
             let logger = this.ledgerLoggers.get(context.streamId)
             if (!logger) {
-                logger = createSpatialLedgerLogger({
-                    streamId: context.streamId,
-                    kernelVersion: this.kernelVersion,
-                })
+                logger = initLedger(new LedgerModel())
                 this.ledgerLoggers.set(context.streamId, logger)
             }
-            ledgerEntry = logger.appendEntry(
-                context.currentTick ?? 0,
-                query.queryType,
-                auditQuadruple,
-            )
+                        appendEntry(logger, {
+                idx: 'append-entry',
+                dat: {
+                    queryType: query.queryType,
+                    tickNumber: context.currentTick ?? 0,
+                    streamId: context.streamId,
+                    auditQuadruple: auditQuadruple,
+                }
+            })
+            ledgerEntry = logger.entries[logger.entries.length - 1]
         }
 
         const receipt: SynchronousExecutionReceipt = {
