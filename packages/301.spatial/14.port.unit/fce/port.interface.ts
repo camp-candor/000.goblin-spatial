@@ -74,11 +74,14 @@ export type ScrubbedSpatialQuery =
     | ScrubbedAcousticQuery
 
 export interface SpatialExecutionContext {
-    readonly executionId: string
-    readonly sequenceNumber: number
-    readonly tickNumber: number
-    readonly topologyHash: string
-    readonly overlayHash: string
+    readonly executionId?: string
+    readonly sequenceNumber?: number
+    readonly tickNumber?: number
+    readonly topologyHash?: string
+    readonly overlayHash?: string
+    readonly streamId?: string
+    readonly recordLedger?: boolean
+    readonly currentTick?: number
 }
 
 export interface SynchronousExecutionReceipt<T = unknown> {
@@ -88,8 +91,18 @@ export interface SynchronousExecutionReceipt<T = unknown> {
     readonly payload: T
     readonly cellsExpanded: number
     readonly failureCode?:
-        'BUDGET_EXCEEDED' | 'UNREACHABLE' | 'OCCLUDED' | 'SCHEMA_BREACH'
+        | 'BUDGET_EXCEEDED'
+        | 'UNREACHABLE'
+        | 'OCCLUDED'
+        | 'SCHEMA_BREACH'
+        | 'IMPASSABLE'
+        | 'CAPACITY_EXHAUSTED'
     readonly executionMicros: number
+    readonly result?: T
+    readonly durationMicros?: number
+    readonly auditQuadruple?: any
+    readonly error?: string
+    readonly ledgerEntry?: any
 }
 
 export interface SpatialPort {

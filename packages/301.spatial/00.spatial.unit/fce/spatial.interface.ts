@@ -1,96 +1,85 @@
-import {
-    ScrubbedAcousticQuery,
-    ScrubbedDisplacementQuery,
+import type { Model } from '../../99.core/interface/model.interface.js'
+import type {
+    SpatialPort,
+    SpatialExecutionContext,
+    SynchronousExecutionReceipt,
     ScrubbedRaycastQuery,
-    ScrubbedReachabilityQuery,
     ScrubbedRoutingQuery,
+    ScrubbedReachabilityQuery,
+    ScrubbedDisplacementQuery,
     ScrubbedSpatialQuery,
-    SpatialQueryType,
 } from '../../14.port.unit/fce/port.interface.js'
-import { PerceptCandidate } from '../../42.receipt.unit/fce/receipt.interface.js'
-import { AcousticWavefrontResult } from '../../13.sound.unit/fce/sound.interface.js'
-import { PathQueryResult } from '../../43.path.unit/buz/path.buzz.js'
-import { ReachableCellsResult } from '../../24.frontier.unit/buz/frontier.buzz.js'
-import { DisplacementResult } from '../../50.displacement.unit/buz/displacement.buzz.js'
-import {
-    SpatialAuditQuadruple,
-    SpatialLedgerEntry,
-} from '../../19.ledger.unit/fce/ledger.interface.js'
-import { DynamicOverlay } from '../../38.types.unit/fce/overlay.schema.js'
-import SpatialBit from './spatial.bit.js'
+import type { MergedTopologySnapshot } from '../../38.types.unit/fce/overlay.schema.js'
+import type {
+    PathReceipt,
+    PerceptCandidate,
+    DisplacementReceipt,
+} from '../../42.receipt.unit/fce/receipt.interface.js'
 
-export default interface Spatial {
-    // idx: string;
-    // spatialBitList: SpatialBit[];
-    // spatialBits: any;
-}
-export type { SpatialBit }
-
-export interface SpatialExecutionContext {
-    readonly topologyHash?: string
-    readonly overlayHash?: string
-    readonly overlay?: DynamicOverlay
-    readonly currentTick?: number
-    readonly streamId?: string
-    readonly recordLedger?: boolean
+export type {
+    SpatialPort,
+    SpatialExecutionContext,
+    SynchronousExecutionReceipt,
 }
 
-export interface SynchronousExecutionReceipt<T = unknown> {
+export interface KernelPathResult {
     readonly ok: boolean
-    readonly queryType: SpatialQueryType
-    readonly result: T
-    readonly durationMicros: number
-    readonly auditQuadruple: SpatialAuditQuadruple
-    readonly ledgerEntry?: SpatialLedgerEntry
-    readonly error?: string
+    readonly path: readonly number[]
+    readonly totalCostUnits: number
+    readonly cellsExpanded: number
+    readonly failureCode?: 'UNREACHABLE' | 'BUDGET_EXCEEDED' | 'IMPASSABLE'
 }
 
-/**
- * Pure synchronous spatial calculation kernel running inside the host V8 isolate.
- * No Promises, no async/await, no IPC serialization.
- */
+export interface KernelRaycastResult {
+    readonly ok: boolean
+    readonly transmissionBps: number
+    readonly topologicalDistance: number
+    readonly isOccluded: boolean
+    readonly occludingCoord: {
+        readonly q: number
+        readonly r: number
+        readonly s: number
+    } | null
+}
+
+export interface KernelDisplacementResult {
+    readonly ok: boolean
+    readonly targetCellPacked: number
+    readonly resolvedCellPacked: number
+    readonly relocationCostUnits: number
+    readonly wasEvicted: boolean
+    readonly failureCode?:
+        'CAPACITY_EXHAUSTED' | 'BUDGET_EXCEEDED' | 'UNREACHABLE'
+}
+
 export interface PureSpatialKernel {
     readonly kernelVersion: string
-
     executeRaycast(
         query: ScrubbedRaycastQuery,
-        context?: SpatialExecutionContext,
-    ): PerceptCandidate
-
-    executeAcousticWavefront(
-        query: ScrubbedAcousticQuery,
-        context?: SpatialExecutionContext,
-    ): AcousticWavefrontResult
-
+        topology?: MergedTopologySnapshot,
+    ): KernelRaycastResult
     executeBoundedPath(
         query: ScrubbedRoutingQuery,
-        context?: SpatialExecutionContext,
-    ): PathQueryResult
-
+        topology?: MergedTopologySnapshot,
+    ): KernelPathResult
     executeReachability(
         query: ScrubbedReachabilityQuery,
-        context?: SpatialExecutionContext,
-    ): ReachableCellsResult
-
+        topology?: MergedTopologySnapshot,
+    ): readonly number[]
     executeDisplacement(
         query: ScrubbedDisplacementQuery,
-        context?: SpatialExecutionContext,
-    ): DisplacementResult
-
-    executeSynchronousQuery(
+        topology?: MergedTopologySnapshot,
+    ): KernelDisplacementResult
+    executeSynchronousQuery?(
         rawQuery: unknown,
         context?: SpatialExecutionContext,
     ): SynchronousExecutionReceipt
 }
 
-/**
- * Public SpatialPort adapter contract consumed directly by worker-sower-engine.
- */
-export interface SpatialPort {
-    readonly kernelVersion: string
-
-    invokeSynchronous<T = unknown>(
-        rawQuery: unknown,
-        context?: SpatialExecutionContext,
-    ): SynchronousExecutionReceipt<T>
+export default interface Spatial extends Model {
+    idx: string
+    kernelVersion: string
+    totalSynchronousInvocations: number
+    totalBudgetsTripped: number
+    lastExecutionMicros: number
 }

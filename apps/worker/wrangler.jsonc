@@ -7,46 +7,4 @@
     "observability": {
         "enabled": true,
     },
-    "ai": {
-        "binding": "AI",
-    },
-    "durable_objects": {
-        "bindings": [
-            {
-                "name": "AGENT_SESSION",
-                "class_name": "AgentSessionDO",
-            },
-        ],
-    },
-    "migrations": [
-        {
-            "tag": "v1",
-            "new_sqlite_classes": ["AgentSessionDO"],
-        },
-    ],
-    "alias": {
-        "ajv": "../../node_modules/@funtuantw/pi-agent-cf/stubs/ajv.js",
-    },
-    "env": {
-        "staging": {
-            "name": "goblin-spatial-staging",
-            "ai": {
-                "binding": "AI",
-            },
-            "durable_objects": {
-                "bindings": [
-                    {
-                        "name": "AGENT_SESSION",
-                        "class_name": "AgentSessionDO",
-                    },
-                ],
-            },
-            "migrations": [
-                {
-                    "tag": "v1",
-                    "new_sqlite_classes": ["AgentSessionDO"],
-                },
-            ],
-        },
-    },
 }

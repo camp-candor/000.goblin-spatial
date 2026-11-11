@@ -21,6 +21,11 @@
     "scripts": {
         "test": "vitest run"
     },
+    "terminal": {
+        "globalKey": "SPATIAL",
+        "menuTitle": "SPATIAL ORACLE",
+        "menuDesc": "Open the SPATIAL ORACLE cockpit\nto run geometric audits."
+    },
     "dependencies": {
         "zod": "3.25.76"
     }

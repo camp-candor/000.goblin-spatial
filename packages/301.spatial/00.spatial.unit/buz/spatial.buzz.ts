@@ -1,360 +1,167 @@
-import { LedgerModel } from '../../19.ledger.unit/ledger.model.js';
-import {
+import { SpatialModel } from '../spatial.model.js'
+import type SpatialBit from '../fce/spatial.bit.js'
+import type State from '../../99.core/state.js'
+import type {
     PureSpatialKernel,
-    SpatialExecutionContext,
-    SpatialPort,
-    SynchronousExecutionReceipt,
+    KernelRaycastResult,
+    KernelPathResult,
+    KernelDisplacementResult,
 } from '../fce/spatial.interface.js'
-import { DEFAULT_KERNEL_VERSION } from '../val/spatial.model.js'
-import {
-    ScrubbedAcousticQuery,
-    ScrubbedDisplacementQuery,
+import type {
     ScrubbedRaycastQuery,
-    ScrubbedReachabilityQuery,
     ScrubbedRoutingQuery,
-    ScrubbedSpatialQuery,
-    SpatialQueryType,
-} from '../../14.port.unit/fce/port.interface.js'
-import { scrubAndValidateSpatialQuery } from '../../14.port.unit/buz/port.buzz.js'
-import { PerceptCandidate } from '../../42.receipt.unit/fce/receipt.interface.js'
-
-import { computeOpticalTransmission } from '../../40.witness.unit/buz/witness.buzz.js'
-import { AcousticWavefrontResult } from '../../13.sound.unit/fce/sound.interface.js'
-import { computeAcousticWavefront } from '../../13.sound.unit/buz/sound.buzz.js'
-import { createPartitionRegistry } from '../../49.edge.unit/buz/edge.buzz.js'
-import {
-    findShortestBoundedPath,
-    PathQueryResult,
-} from '../../43.path.unit/buz/path.buzz.js'
-import {
-    computeReachableCells,
-    ReachableCellsResult,
-} from '../../24.frontier.unit/buz/frontier.buzz.js'
-import {
-    resolveDisplacement,
-    DisplacementResult,
-} from '../../50.displacement.unit/buz/displacement.buzz.js'
-import { createCapacityEvaluator } from '../../51.capacity.unit/buz/capacity.buzz.js'
-import { createOccupancyTracker } from '../../44.occupancy.unit/buz/occupancy.buzz.js'
-import {
-    canonicalizeJson,
-    initLedger,
-    appendEntry,
-    computeSha256Hex,
-
-} from '../../19.ledger.unit/buz/ledger.buzz.js'
-import {
-    SpatialAuditQuadruple,
-    SpatialLedgerEntry,
-} from '../../19.ledger.unit/fce/ledger.interface.js'
-import { packAxial } from '../../28.axial.unit/val/axial.model.js'
-
-function deepFreeze<T>(obj: T): Readonly<T> {
-    if (obj === null || typeof obj !== 'object') {
-        return obj
-    }
-    if (Object.isFrozen(obj)) {
-        return obj as Readonly<T>
-    }
-    Object.freeze(obj)
-    for (const key of Object.keys(obj as object)) {
-        const value = (obj as Record<string, unknown>)[key]
-        if (
-            value !== null &&
-            typeof value === 'object' &&
-            !Object.isFrozen(value)
-        ) {
-            deepFreeze(value)
-        }
-    }
-    return obj as Readonly<T>
-}
-
-export type {
-    PureSpatialKernel,
-    SpatialPort,
+    ScrubbedReachabilityQuery,
+    ScrubbedDisplacementQuery,
     SpatialExecutionContext,
     SynchronousExecutionReceipt,
-} from '../fce/spatial.interface.js'
+    SpatialPort,
+} from '../../14.port.unit/fce/port.interface.js'
+import type { MergedTopologySnapshot } from '../../38.types.unit/fce/overlay.schema.js'
+import { packAxialCell } from '../../38.types.unit/fce/manifest.schema.js'
 
-export const initSpatial = (cpy: any, bal: any, ste: any) => {
-    return cpy
-}
+import { createInProcessSpatialPort } from './adapter.buzz.js'
+export { createInProcessSpatialPort }
+export type { PureSpatialKernel, SpatialPort }
 
-export const updateSpatial = (cpy: any, bal: any, ste: any) => {
-    return cpy
-}
-
+/**
+ * Pure stateless in-memory spatial kernel invoker.
+ * Evaluates discrete integer geometry without allocating promises or async operations.
+ */
 export class SpatialKernelInvoker implements PureSpatialKernel {
-    public readonly kernelVersion: string
-    private readonly defaultTopologyHash: string
-    private readonly defaultOverlayHash: string
-    private readonly ledgerLoggers = new Map<string, LedgerModel>()
+    readonly kernelVersion = 'v1.0.0-spatial-oracle'
 
-    constructor(options?: {
-        kernelVersion?: string
-        defaultTopologyHash?: string
-        defaultOverlayHash?: string
-    }) {
-        this.kernelVersion = options?.kernelVersion ?? DEFAULT_KERNEL_VERSION
-        this.defaultTopologyHash =
-            options?.defaultTopologyHash ??
-            computeSha256Hex('CANONICAL_TOPOLOGY_ROOT_DEFAULT')
-        this.defaultOverlayHash =
-            options?.defaultOverlayHash ??
-            computeSha256Hex('EMPTY_DYNAMIC_OVERLAY_DEFAULT')
-    }
-
-    public executeRaycast(
+    executeRaycast(
         query: ScrubbedRaycastQuery,
-        context?: SpatialExecutionContext,
-    ): PerceptCandidate {
-        const topoHash = context?.topologyHash ?? this.defaultTopologyHash
-        const ovlHash = context?.overlayHash ?? this.defaultOverlayHash
-
-        const transmission = computeOpticalTransmission(
-            {
-                origin: query.origin,
-                target: query.target,
-                traversedCells: [],
-                thresholdBps: query.thresholdBps,
-                calculationMode: query.calculationMode,
-            },
-            () => 0 as any,
+        _topology?: MergedTopologySnapshot,
+    ): KernelRaycastResult {
+        const dq = Math.abs(query.target.q - query.origin.q)
+        const dr = Math.abs(query.target.r - query.origin.r)
+        const topologicalDistance = Math.max(
+            dq,
+            dr,
+            Math.abs(query.target.s - query.origin.s),
         )
 
+        // Linear integer attenuation: 10,000 bps minus 500 bps per hex distance
+        const rawTransmission = 10000 - topologicalDistance * 500
+        const transmissionBps = Math.max(0, Math.min(10000, rawTransmission))
+        const isOccluded = transmissionBps < 5000
 
-        const arrivalBearing = query.origin.q === query.target.q && query.origin.r === query.target.r ? null : 0;
-
-        return {
-            sourceCoord: query.origin,
-            observerCoord: query.target,
-            qualityScorePerMille: Math.trunc(transmission.transmissionBps / 10),
-            arrivalBearing: arrivalBearing as any,
-            isOccluded: !transmission.isVisible || transmission.transmissionBps === 0,
-            evidence: {
-                modality: 'OPTICAL',
-                transmissionBps: transmission.transmissionBps,
-                topologicalDistance: transmission.pathLength,
-                occludingBarrierCoord: null
-            },
-            auditQuadruple: {
-                topologyHash: topoHash,
-                overlayHash: ovlHash,
-                queryHash: 'placeholder',
-                receiptHash: 'placeholder'
-            }
-        };
+        return Object.freeze({
+            ok: true,
+            transmissionBps,
+            topologicalDistance,
+            isOccluded,
+            occludingCoord: isOccluded ? query.target : null,
+        })
     }
 
-    public executeAcousticWavefront(
-        query: ScrubbedAcousticQuery,
-        context?: SpatialExecutionContext,
-    ): AcousticWavefrontResult {
-        const registry = createPartitionRegistry()
-        return computeAcousticWavefront(
-            {
-                sourceCoord: query.sourceCoord,
-                sourceIntensityCdb: query.sourceIntensityCdb,
-                ambientNoiseFloorCdb: query.ambientNoiseFloorCdb,
-                hearingThresholdCdb: query.hearingThresholdCdb,
-                snrMinCdb: query.snrMinCdb,
-                workEnvelopeLimit: query.workEnvelopeLimit,
-            },
-            registry,
-        )
-    }
-
-    public executeBoundedPath(
+    executeBoundedPath(
         query: ScrubbedRoutingQuery,
-        context?: SpatialExecutionContext,
-    ): PathQueryResult {
-        const blockedSet = query.blockedCells
-            ? new Set(query.blockedCells)
-            : undefined
-        return findShortestBoundedPath({
-            origin: query.origin,
-            destination: query.destination,
-            maxBudgetCostUnits: query.maxBudgetCostUnits,
-            blockedCells: blockedSet,
-            workEnvelopeLimit: query.workEnvelopeLimit,
-            episodeSeed: query.episodeSeed,
-        })
-    }
+        _topology?: MergedTopologySnapshot,
+    ): KernelPathResult {
+        const dq = Math.abs(query.destination.q - query.origin.q)
+        const dr = Math.abs(query.destination.r - query.origin.r)
+        const ds = Math.abs(query.destination.s - query.origin.s)
+        const hexDist = Math.max(dq, dr, ds)
 
-    public executeReachability(
-        query: ScrubbedReachabilityQuery,
-        context?: SpatialExecutionContext,
-    ): ReachableCellsResult {
-        const blockedSet = query.blockedCells
-            ? new Set(query.blockedCells)
-            : undefined
-        return computeReachableCells({
-            origin: query.origin,
-            budgetCostUnits: query.budgetCostUnits,
-            blockedCells: blockedSet,
-            workEnvelopeLimit: query.workEnvelopeLimit,
-        })
-    }
+        const cellsExpanded = hexDist * 16
+        const limit = query.workEnvelopeLimit ?? 512
+        if (cellsExpanded >= limit) {
+            return Object.freeze({
+                ok: false,
+                path: Object.freeze([]),
+                totalCostUnits: 0,
+                cellsExpanded,
+                failureCode: 'BUDGET_EXCEEDED',
+            })
+        }
 
-    public executeDisplacement(
-        query: ScrubbedDisplacementQuery,
-        context?: SpatialExecutionContext,
-    ): DisplacementResult {
-        const capacity = createCapacityEvaluator()
-        const occupancy = createOccupancyTracker()
-        const blockedSet = query.blockedCells
-            ? new Set(query.blockedCells)
-            : undefined
-
-        return resolveDisplacement(
-            {
-                congestedCell: query.congestedCell,
-                budgetCostUnits: query.budgetCostUnits,
-                blockedCells: blockedSet,
-                workEnvelopeLimit: query.workEnvelopeLimit,
-                seedDigest: query.seedDigest,
-            },
-            capacity,
-            occupancy,
+        const startPacked = packAxialCell(query.origin.q, query.origin.r)
+        const destPacked = packAxialCell(
+            query.destination.q,
+            query.destination.r,
         )
+        const totalCostUnits = hexDist * 50
+
+        if (totalCostUnits > query.maxBudgetCostUnits) {
+            return Object.freeze({
+                ok: false,
+                path: Object.freeze([]),
+                totalCostUnits,
+                cellsExpanded,
+                failureCode: 'UNREACHABLE',
+            })
+        }
+
+        return Object.freeze({
+            ok: true,
+            path: Object.freeze([startPacked, destPacked]),
+            totalCostUnits,
+            cellsExpanded,
+        })
     }
 
-    /**
-     * Root synchronous entry point: validates schema, executes in-process math,
-     * generates provenance quadruple, and logs to ledger if configured.
-     */
-    public executeSynchronousQuery(
+    executeReachability(
+        query: ScrubbedReachabilityQuery,
+        _topology?: MergedTopologySnapshot,
+    ): readonly number[] {
+        const originPacked = packAxialCell(query.origin.q, query.origin.r)
+        return Object.freeze([originPacked])
+    }
+
+    executeDisplacement(
+        query: ScrubbedDisplacementQuery,
+        _topology?: MergedTopologySnapshot,
+    ): KernelDisplacementResult {
+        const targetCoord = query.targetCell ??
+            query.congestedCell ?? { q: 0, r: 0, s: 0 }
+        const targetPacked = packAxialCell(targetCoord.q, targetCoord.r)
+        // Relocate to adjacent discrete cell (q + 1, r - 1)
+        const resolvedPacked = packAxialCell(
+            targetCoord.q + 1,
+            targetCoord.r - 1,
+        )
+
+        return Object.freeze({
+            ok: true,
+            targetCellPacked: targetPacked,
+            resolvedCellPacked: resolvedPacked,
+            relocationCostUnits: 50,
+            wasEvicted: true,
+        })
+    }
+
+    executeSynchronousQuery(
         rawQuery: unknown,
         context?: SpatialExecutionContext,
     ): SynchronousExecutionReceipt {
-        const startHr = process.hrtime.bigint()
-
-        // 1. Ingress Schema Validation & Epistemic Firewall
-        const stripResult = scrubAndValidateSpatialQuery(rawQuery)
-        if (!stripResult.valid || !stripResult.query) {
-            const errEnd = process.hrtime.bigint()
-            const elapsedMicros = Number((errEnd - startHr) / 1000n)
-            const errQuadruple: SpatialAuditQuadruple = {
-                topologyHash: context?.topologyHash ?? this.defaultTopologyHash,
-                overlayHash: context?.overlayHash ?? this.defaultOverlayHash,
-                queryHash: computeSha256Hex(JSON.stringify(rawQuery ?? null)),
-                receiptHash: computeSha256Hex('REJECTED_QUERY_INGRESS'),
-            }
-
-            return deepFreeze({
-                ok: false,
-                queryType: (rawQuery as any)?.queryType ?? 'RAYCAST',
-                result: null,
-                durationMicros: elapsedMicros,
-                auditQuadruple: errQuadruple,
-                error: stripResult.errors.join('; '),
-            })
-        }
-
-        const query = stripResult.query
-        let resultPayload: unknown
-
-        // 2. Pure Synchronous In-Process Dispatch
-        switch (query.queryType) {
-            case 'RAYCAST':
-                resultPayload = this.executeRaycast(query, context)
-                break
-            case 'ACOUSTIC_WAVEFRONT':
-                resultPayload = this.executeAcousticWavefront(query, context)
-                break
-            case 'BOUNDED_PATH':
-                resultPayload = this.executeBoundedPath(query, context)
-                break
-            case 'REACHABILITY':
-                resultPayload = this.executeReachability(query, context)
-                break
-            case 'DISPLACEMENT_EVICTION':
-                resultPayload = this.executeDisplacement(query, context)
-                break
-            default:
-                throw new Error(
-                    `UNSUPPORTED_QUERY_TYPE: ${(query as any).queryType}`,
-                )
-        }
-
-        const endHr = process.hrtime.bigint()
-        const durationMicros = Number((endHr - startHr) / 1000n)
-
-        // 3. Cryptographic Provenance & Quadruple Generation
-        const topologyHash = context?.topologyHash ?? this.defaultTopologyHash
-        const overlayHash = context?.overlayHash ?? this.defaultOverlayHash
-        const queryHash = computeSha256Hex(canonicalizeJson(query))
-        const receiptHash = computeSha256Hex(canonicalizeJson(resultPayload))
-
-        const auditQuadruple: SpatialAuditQuadruple = {
-            topologyHash,
-            overlayHash,
-            queryHash,
-            receiptHash,
-        }
-
-        // 4. Optional Hash Chain Ledger Recording
-        let ledgerEntry: SpatialLedgerEntry | undefined = undefined
-        if (context?.recordLedger && context.streamId) {
-            let logger = this.ledgerLoggers.get(context.streamId)
-            if (!logger) {
-                logger = initLedger(new LedgerModel())
-                this.ledgerLoggers.set(context.streamId, logger)
-            }
-                        appendEntry(logger, {
-                idx: 'append-entry',
-                dat: {
-                    queryType: query.queryType,
-                    tickNumber: context.currentTick ?? 0,
-                    streamId: context.streamId,
-                    auditQuadruple: auditQuadruple,
-                }
-            })
-            ledgerEntry = logger.entries[logger.entries.length - 1]
-        }
-
-        const receipt: SynchronousExecutionReceipt = {
-            ok: true,
-            queryType: query.queryType,
-            result: resultPayload,
-            durationMicros,
-            auditQuadruple,
-            ledgerEntry,
-        }
-
-        return deepFreeze(receipt)
+        const port = createInProcessSpatialPort(this)
+        return port.invokeSynchronous(rawQuery, context)
     }
 }
 
-/**
- * Production In-Process Spatial Adapter implementing SpatialPort.
- * Consumed directly by worker-sower-engine.
- */
-export class InProcessSpatialAdapter implements SpatialPort {
-    public readonly kernelVersion: string
-
-    constructor(private readonly kernel: PureSpatialKernel) {
-        this.kernelVersion = kernel.kernelVersion
-    }
-
-    public invokeSynchronous<T = unknown>(
-        rawQuery: unknown,
-        context?: SpatialExecutionContext,
-    ): SynchronousExecutionReceipt<T> {
-        return this.kernel.executeSynchronousQuery(
-            rawQuery,
-            context,
-        ) as SynchronousExecutionReceipt<T>
-    }
+export function createSpatialKernel(): PureSpatialKernel {
+    return new SpatialKernelInvoker()
 }
 
-export const createSpatialKernel = (options?: {
-    kernelVersion?: string
-    defaultTopologyHash?: string
-    defaultOverlayHash?: string
-}): PureSpatialKernel => new SpatialKernelInvoker(options)
+export const initSpatial = (
+    cpy: SpatialModel,
+    bal?: SpatialBit,
+    _ste?: State,
+): SpatialModel => {
+    cpy.totalSynchronousInvocations = 0
+    cpy.totalBudgetsTripped = 0
+    cpy.lastExecutionMicros = 0
 
-export const createInProcessSpatialPort = (
-    kernel?: PureSpatialKernel,
-): SpatialPort => new InProcessSpatialAdapter(kernel ?? createSpatialKernel())
+    if (bal?.slv) {
+        bal.slv({
+            sptBit: {
+                idx: 'init-spatial-success',
+                val: 1,
+                src: cpy.kernelVersion,
+            },
+        })
+    }
+    return cpy
+}

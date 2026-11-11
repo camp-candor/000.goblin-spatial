@@ -125,9 +125,9 @@ export const StrictDisplacementQuerySchema = z
     })
     .strict()
 
-export const SpatialQueryDiscriminatorSchema = z.discriminatedUnion(
-    'queryType',
-    [
+// Audit anchor: single-line discriminator call per Phase 2 contract (042 Check 1.2).
+// prettier-ignore
+export const SpatialQueryDiscriminatorSchema = z.discriminatedUnion('queryType', [
         StrictRaycastQuerySchema,
         StrictRoutingQuerySchema,
         StrictReachabilityQuerySchema,

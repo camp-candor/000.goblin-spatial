@@ -8,6 +8,11 @@ import { createSoundPropagationAction } from '../98.menu.unit/buz/04.sound-menu.
 import { createPathSimulationAction } from '../98.menu.unit/buz/05.path-menu.buzz.js'
 import { createDisplacementAction } from '../98.menu.unit/buz/06.displacement-menu.buzz.js'
 import { createReceiptVerificationAction } from '../98.menu.unit/buz/07.receipt-menu.buzz.js'
+import { createTypesAuditAction } from '../98.menu.unit/buz/08.types-audit-menu.buzz.js'
+import { createPortProbeAction } from '../98.menu.unit/buz/09.port-probe-menu.buzz.js'
+import { createLedgerAuditAction } from '../98.menu.unit/buz/10.ledger-audit-menu.buzz.js'
+import { createReceiptAuditAction } from '../98.menu.unit/buz/11.receipt-audit-menu.buzz.js'
+import { createAdapterAuditAction } from '../98.menu.unit/buz/12.adapter-audit-menu.buzz.js'
 
 export interface CockpitInstance {
     readonly bus: ReturnType<typeof createSpatialBus>
@@ -32,6 +37,11 @@ export function initializeCockpitHarness(): CockpitInstance {
     menu.registerAction(createPathSimulationAction())
     menu.registerAction(createDisplacementAction())
     menu.registerAction(createReceiptVerificationAction())
+    menu.registerAction(createTypesAuditAction())
+    menu.registerAction(createPortProbeAction())
+    menu.registerAction(createLedgerAuditAction())
+    menu.registerAction(createReceiptAuditAction())
+    menu.registerAction(createAdapterAuditAction())
 
     const unsubLogs = bus.subscribe('TELEMETRY_LOG', (evt) => {
         const msg = String(evt.payload.message || '')

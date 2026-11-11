@@ -1,9 +1,20 @@
-import MenuBit from './menu.bit'
+import type { Model } from '../../99.core/interface/model.interface.js'
 
-export default interface Menu {
-    // idx:string;
-    // menuBitList: MenuBit[];
-    // menuBits: any;
+export type MenuMode = 'ROOT' | 'BOUNDARY_AUDIT' | 'TOPOLOGY_INSPECTION'
+
+export interface MenuChoiceItem {
+    readonly id: string
+    readonly label: string
+    readonly tooltip: string
+}
+
+export default interface Menu extends Model {
+    idx: string
+    activeMenuMode: MenuMode
+    lastActionTimestamp: number
+    totalInteractions: number
+    statusMessage: string
+    lastAuditSummary: string | null
 }
 
 export interface MenuActionPayload {

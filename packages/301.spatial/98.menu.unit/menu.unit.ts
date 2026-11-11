@@ -1,6 +1,9 @@
-import State from '../99.core/state.js'
+import type { Unit } from '../99.core/interface/unit.interface.js'
+import { MenuModel } from './menu.model.js'
+import { reducer } from './menu.reduce.js'
 
-export default class MenuUnit {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars, @typescript-eslint/no-empty-function
-    constructor(state: State) {}
+export default class MenuUnit implements Unit<MenuModel> {
+    idx: string = '98.menu'
+    model: MenuModel = new MenuModel()
+    reducer = reducer
 }

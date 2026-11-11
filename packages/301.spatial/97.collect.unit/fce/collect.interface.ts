@@ -1,29 +1,19 @@
-import {
-    ScrubbedAcousticQuery,
-    ScrubbedDisplacementQuery,
-    ScrubbedRaycastQuery,
-    ScrubbedReachabilityQuery,
-    ScrubbedRoutingQuery,
-    SpatialQueryType,
-} from '../../14.port.unit/fce/port.interface.js'
-import {
-    PureSpatialKernel,
+import type { Model } from '../../99.core/interface/model.interface.js'
+import type {
     SpatialExecutionContext,
     SynchronousExecutionReceipt,
-} from '../../00.spatial.unit/fce/spatial.interface.js'
-import { PerceptCandidate } from '../../42.receipt.unit/fce/receipt.interface.js'
-import CollectBit from './collect.bit.js'
-import CaboodleBit from './caboodle.bit.js'
-
-export default interface Collect {
-    idx: string
-    caboodleBitList: CaboodleBit[]
-    caboodleBits: any
-}
+    ScrubbedRaycastQuery,
+} from '../../14.port.unit/fce/port.interface.js'
+import type { PerceptCandidate } from '../../42.receipt.unit/fce/receipt.interface.js'
 
 export interface BatchQueryEnvelope {
     readonly batchId: string
     readonly queries: Readonly<Record<string, unknown>>
+}
+
+export interface HomogeneousRaycastBatch {
+    readonly batchId: string
+    readonly queries: Readonly<Record<string, ScrubbedRaycastQuery>>
 }
 
 export interface BatchExecutionSummary {
@@ -32,34 +22,32 @@ export interface BatchExecutionSummary {
     readonly failedCount: number
     readonly totalDurationMicros: number
     readonly averageDurationMicros: number
-    readonly batchAuditHash: string // 64-char hex SHA-256 of key-sorted receipt hashes
+    readonly batchAuditHash: string
 }
 
 export interface BatchExecutionResult<T = unknown> {
+    readonly ok: boolean
     readonly batchId: string
-    readonly receipts: Readonly<Record<string, SynchronousExecutionReceipt<T>>>
     readonly summary: BatchExecutionSummary
+    readonly receipts: Readonly<Record<string, SynchronousExecutionReceipt<T>>>
 }
 
-export interface HomogeneousRaycastBatch {
-    readonly batchId: string
-    readonly queries: Readonly<Record<string, ScrubbedRaycastQuery>>
-}
-
-/**
- * Pure synchronous spatial batch aggregator.
- * Executes heterogeneous or homogeneous query batches in a single synchronous pass.
- */
 export interface SpatialBatchAggregator {
-    readonly kernel: PureSpatialKernel
-
+    readonly kernelVersion: string
     executeBatch(
         envelope: BatchQueryEnvelope,
         context?: SpatialExecutionContext,
     ): BatchExecutionResult
-
     executeRaycastBatch(
         batch: HomogeneousRaycastBatch,
         context?: SpatialExecutionContext,
     ): BatchExecutionResult<PerceptCandidate>
+}
+
+export default interface Collect extends Model {
+    idx: string
+    kernelVersion: string
+    totalBatchesProcessed: number
+    totalQueriesProcessed: number
+    lastBatchDurationMicros: number
 }

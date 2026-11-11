@@ -59,7 +59,7 @@ export const projectCloudflare = async (cpy: CloudflareModel, bal: CloudflareBit
   const apiToken = process.env.CLOUDFLARE_WORKERS_TOKEN;
 
   if (!accountId || !apiToken) {
-    if (bal.slv != null) bal.slv({ cflBit: { idx: 'project-cloudflare', lst: { workers: [], pages: [] }, err: 'Missing credentials' } });
+    if (bal.slv != null) bal.slv({ cflBit: { idx: 'project-cloudflare', dat: { workers: [], pages: [] }, err: 'Missing credentials' } });
     return cpy;
   }
 

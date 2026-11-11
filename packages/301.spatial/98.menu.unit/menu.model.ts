@@ -1,15 +1,13 @@
-import Menu from './fce/menu.interface.js'
-import MenuBit from './fce/menu.interface.js'
+import type Menu from './fce/menu.interface.js'
+import type { MenuMode } from './fce/menu.interface.js'
 
 export class MenuModel implements Menu {
-    lst: string[] = []
-
-    geoJsonNow: any
-    atlasNow: any
-    sizeNow: any = 0
-    mapShape: string = 'none'
-    mapNomNow: string = 'none'
-    mapDimensions: string = 'none'
-
-    shapeBit: any
+    idx: string = '98.menu'
+    activeMenuMode: MenuMode = 'ROOT'
+    lastActionTimestamp: number = 0
+    totalInteractions: number = 0
+    statusMessage: string = 'SPATIAL_ORACLE_READY'
+    lastAuditSummary: string | null = null
 }
+
+export default MenuModel

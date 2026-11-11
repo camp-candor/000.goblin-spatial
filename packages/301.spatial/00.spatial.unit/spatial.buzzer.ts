@@ -1,2 +1,9 @@
-export { initSpatial } from './buz/spatial.buzz'
-export { updateSpatial } from './buz/spatial.buzz'
+export {
+    SpatialKernelInvoker,
+    initSpatial,
+    createSpatialKernel,
+} from './buz/spatial.buzz.js'
+export {
+    InProcessSpatialAdapter,
+    createInProcessSpatialPort,
+} from './buz/adapter.buzz.js'

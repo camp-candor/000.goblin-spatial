@@ -101,4 +101,40 @@ describe('cloudflare', () => {
 
     process.env = originalEnv;
   });
+
+  it('should resolve empty dat when credentials are missing', async () => {
+    const originalAccount = process.env.CLOUDFLARE_ACCOUNT;
+    const originalToken = process.env.CLOUDFLARE_WORKERS_TOKEN;
+    delete process.env.CLOUDFLARE_ACCOUNT;
+    delete process.env.CLOUDFLARE_WORKERS_TOKEN;
+
+    const explodingFetch = vi.fn(() => {
+      throw new Error('fetch must not be called without credentials');
+    });
+    const originalFetch = global.fetch;
+    global.fetch = explodingFetch as any;
+
+    try {
+      const model = new CloudflareModel();
+      const state = {} as any;
+      const slv = vi.fn();
+      const bal = { idx: 'test', slv } as any;
+
+      const result = await projectCloudflare(model, bal, state);
+
+      expect(result).toBe(model);
+      expect(explodingFetch).not.toHaveBeenCalled();
+      expect(slv).toHaveBeenCalledWith({
+        cflBit: {
+          idx: 'project-cloudflare',
+          dat: { workers: [], pages: [] },
+          err: 'Missing credentials',
+        },
+      });
+    } finally {
+      if (originalAccount !== undefined) process.env.CLOUDFLARE_ACCOUNT = originalAccount;
+      if (originalToken !== undefined) process.env.CLOUDFLARE_WORKERS_TOKEN = originalToken;
+      global.fetch = originalFetch;
+    }
+  });
 });

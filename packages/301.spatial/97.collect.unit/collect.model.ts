@@ -1,9 +1,11 @@
-import CaboodleBit from './fce/caboodle.bit.js'
-import Collect from './fce/collect.interface.js'
-import CollectBit from './fce/collect.interface.js'
+import type Collect from './fce/collect.interface.js'
 
 export class CollectModel implements Collect {
-    idx: string = '23.11.14'
-    caboodleBitList: CaboodleBit[] = []
-    caboodleBits: any = {}
+    idx: string = '97.collect'
+    kernelVersion: string = 'v1.0.0-spatial-oracle'
+    totalBatchesProcessed: number = 0
+    totalQueriesProcessed: number = 0
+    lastBatchDurationMicros: number = 0
 }
+
+export default CollectModel

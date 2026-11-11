@@ -1,102 +1,83 @@
 import { Hono } from 'hono'
-import { createAgentWorker } from '@funtuantw/pi-agent-cf'
-import { coreTools, type Env } from './tools.core.js'
-// import { customTools } from './tools.custom.js'
+import { EdgeSpatialAdapter } from './spatial/inProcessAdapter.js'
 
-// ----------------------------------------------------------------------------
-// :: DETERMINISTIC LLM & DEVOPS SYSTEM PROMPT
-// ----------------------------------------------------------------------------
-
-const cfModel: any = {
-    id: '@cf/meta/llama-3.2-3b-instruct',
-    api: 'openai-completions',
-    provider: 'openai',
-    baseUrl: '',
-    reasoning: false,
-    input: ['text'],
-    temperature: 0.1,
-    compat: {
-        supportsStore: false,
-        supportsDeveloperRole: false,
-        supportsStrictMode: false,
-    },
+export interface Env {
+    ENVIRONMENT?: string
+    GATEWAY_SECRET?: string
 }
 
-const dynamicWorker = createAgentWorker<Env>({
-    systemPrompt: (env) => {
-        cfModel.baseUrl = `https://api.cloudflare.com/client/v4/accounts/${env.CLOUDFLARE_ACCOUNT_ID}/ai/v1`
-
-        return `
-You are repo-bot, the deterministic DevOps Control Plane and Git Mechanic.
-You possess a suite of deterministic Git and CI surveillance instruments:
-1. 'get_commit_sha': Captures the immutable base rollback anchor (S_clean) before modifying branches.
-2. 'create_ephemeral_branch': Creates an isolated work branch (spec/TASK-XX-<short-sha>). Direct commits to main are forbidden.
-3. 'write_repo_file': Writes bounded UTF-8 content to an ephemeral branch.
-4. 'create_pull_request': Opens a Pull Request from an ephemeral branch to trunk for validation.
-5. 'inspect_repo_checks': Queries repository commits and evaluates check-run CI outcomes.
-
-OPERATIONAL INVARIANTS:
-- Always capture S_clean via get_commit_sha before creating branches.
-- Never modify files directly on main or production tracking branches.
-- Output deterministic, structured summaries following tool execution.
-        `.trim()
-    },
-    model: cfModel,
-    tools: (env) => [...coreTools(env)],
-    getApiKey: (provider, env) => {
-        if (provider === 'openai') return env.CLOUDFLARE_API_TOKEN
-        return undefined
-    },
-})
-
-// ----------------------------------------------------------------------------
-// :: HONO ROUTER
-// ----------------------------------------------------------------------------
-
 const app = new Hono<{ Bindings: Env }>()
+const spatialAdapter = new EdgeSpatialAdapter()
 
-// Root Health & Verification Endpoint
-app.get('/', (c) => c.text('REPO-BOT EDGE CONTROL PLANE IS LIVE'))
-
-// Structured Diagnostics Endpoint (Satisfies packages/100.agent switchboard probe)
-app.get('/health', (c) =>
-    c.json(
-        {
-            status: 'healthy',
-            service: 'goblin-spatial-worker',
-            timestamp: new Date().toISOString(),
-            hasGithubToken: Boolean(c.env.GITHUB_TOKEN),
-            aiGateway: c.env.CLOUDFLARE_AI_GATEWAY || 'default',
-        },
-        200,
-    ),
-)
-
-// Fast-Path Oracle Endpoint
-app.get('/oracle', async (c) => {
-    try {
-        const prompt = c.req.query('prompt') || 'Inspect system status'
-        const response = await c.env.AI.run('@cf/meta/llama-3.2-3b-instruct', {
-            messages: [
-                { role: 'user', content: `${prompt}. Output ONLY raw JSON.` },
-            ],
-        })
-        return c.text(response.response || JSON.stringify(response))
-    } catch (error: any) {
-        console.error('Oracle Error:', error)
-        return c.text(`Error: ${error.message}`, 500)
-    }
+// Health Check
+app.get('/health', (c) => {
+    return c.json({
+        status: 'HEALTHY',
+        service: 'goblin-spatial-edge-worker',
+        kernelVersion: spatialAdapter.kernelVersion,
+        timestampMs: Date.now(),
+    })
 })
 
-// Durable Object Session Ingress
-app.all('/*', async (c) => {
-    if (!dynamicWorker.handler.fetch) return c.text('Handler missing', 500)
-    return await dynamicWorker.handler.fetch(
-        c.req.raw as any,
-        c.env,
-        c.executionCtx,
+app.get('/spatial/health', (c) => {
+    return c.text(
+        '>> [SPATIAL::EDGE] Goblin Spatial Edge Oracle Online. Version: ' +
+            spatialAdapter.kernelVersion,
     )
 })
 
-export const AgentSessionDO = dynamicWorker.AgentSessionDO
+// Single Spatial Query Endpoint
+app.post('/spatial/query', async (c) => {
+    try {
+        const body = await c.req.json()
+        const topologyHash = c.req.header('X-Topology-Hash')
+        const overlayHash = c.req.header('X-Overlay-Hash')
+
+        const receipt = await spatialAdapter.evaluateQuery(body, {
+            topologyHash: topologyHash || undefined,
+            overlayHash: overlayHash || undefined,
+        })
+
+        return c.json(receipt, receipt.ok ? 200 : 400)
+    } catch (err: any) {
+        return c.json(
+            {
+                ok: false,
+                failureCode: 'SCHEMA_BREACH',
+                error: err.message || 'MALFORMED_JSON_REQUEST',
+            },
+            400,
+        )
+    }
+})
+
+// Batch Spatial Aggregation Endpoint
+app.post('/spatial/batch', async (c) => {
+    try {
+        const body = await c.req.json()
+        if (!body || !body.batchId || typeof body.queries !== 'object') {
+            return c.json(
+                {
+                    ok: false,
+                    error: '[SCHEMA_BREACH] Missing batchId or queries map',
+                },
+                400,
+            )
+        }
+
+        const batchResult = await spatialAdapter.evaluateBatch(body)
+        return c.json(batchResult, batchResult.ok ? 200 : 207)
+    } catch (err: any) {
+        return c.json(
+            { ok: false, error: err.message || 'MALFORMED_BATCH_REQUEST' },
+            400,
+        )
+    }
+})
+
+// Root Gateway Banner
+app.get('/', (c) => {
+    return c.text('GOBLIN SPATIAL EDGE ADAPTER ONLINE')
+})
+
 export default app
