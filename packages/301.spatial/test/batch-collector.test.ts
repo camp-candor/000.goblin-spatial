@@ -175,8 +175,8 @@ describe('Task 8.5 Multi-Query Batch Aggregator', () => {
 
         const result = collector.executeRaycastBatch(raycastBatch)
         expect(result.summary.totalQueries).toBe(2)
-        expect(result.receipts.actor_1.result.channel).toBe('OPTICAL')
-        expect(result.receipts.actor_2.result.channel).toBe('OPTICAL')
+        expect(result.receipts.actor_1.result.evidence.modality).toBe('OPTICAL')
+        expect(result.receipts.actor_2.result.evidence.modality).toBe('OPTICAL')
     })
 
     it('enforces deep-freeze runtime immutability on batch results', () => {

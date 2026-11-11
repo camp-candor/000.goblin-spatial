@@ -1,187 +1,155 @@
-import { ReceiptModel } from '../receipt.model.js'
-import ReceiptBit from '../fce/receipt.bit.js'
-import State from '../../99.core/state.js'
-
-import { AxialCoord, packAxial } from '../../28.axial.unit/val/axial.model.js'
-import { OpticalTransmissionReceipt } from '../../40.witness.unit/fce/witness.interface.js'
-import { AuditoryPerceptReceipt } from '../../13.sound.unit/fce/sound.interface.js'
+import { ReceiptModel } from '../receipt.model.js';
+import type ReceiptBit from '../fce/receipt.bit.js';
+import type State from '../../99.core/state.js';
+import type {
+  PathReceipt,
+  PerceptCandidate,
+  DisplacementReceipt,
+} from '../fce/receipt.interface.js';
 import {
-    PerceptCandidate,
-    ReceiptBatchSummary,
-} from '../fce/receipt.interface.js'
-import { PerceptCandidateSchema } from '../val/receipt.model.js'
-
-export const initReceipt = (cpy: ReceiptModel, bal: ReceiptBit, ste: State) => {
-    debugger
-    return cpy
-}
-
-export const updateReceipt = (
-    cpy: ReceiptModel,
-    bal: ReceiptBit,
-    ste: State,
-) => {
-    return cpy
-}
-
-function deepFreeze<T>(obj: T): Readonly<T> {
-    if (obj === null || typeof obj !== 'object') {
-        return obj
-    }
-    Object.freeze(obj)
-    for (const key of Object.keys(obj as object)) {
-        const value = (obj as Record<string, unknown>)[key]
-        if (
-            value !== null &&
-            typeof value === 'object' &&
-            !Object.isFrozen(value)
-        ) {
-            deepFreeze(value)
-        }
-    }
-    return obj as Readonly<T>
-}
+  PathReceiptSchema,
+  PerceptCandidateSchema,
+  DisplacementReceiptSchema,
+} from '../val/receipt.model.js';
 
 /**
- * Calculates hexagonal axial bearing from observer to source (0..5),
- * or returns null if co-located.
+ * Deep freezes an object recursively to guarantee plain data immutability.
  */
-export function calculateAxialArrivalBearing(
-    observer: AxialCoord,
-    source: AxialCoord,
-): number | null {
-    const dq = source.q - observer.q
-    const dr = source.r - observer.r
-
-    if (dq === 0 && dr === 0) {
-        return null
+export function deepFreezeReceipt<T>(obj: T): T {
+  if (obj === null || typeof obj !== 'object') return obj;
+  Object.freeze(obj);
+  for (const key of Object.getOwnPropertyNames(obj)) {
+    const val = (obj as any)[key];
+    if (val !== null && typeof val === 'object' && !Object.isFrozen(val)) {
+      deepFreezeReceipt(val);
     }
-
-    // Canonical axial hexagonal direction sectors
-    if (dq > 0 && dr === 0) return 0 // +q (East)
-    if (dq > 0 && dr < 0) return 1 // +q, -r (Northeast)
-    if (dq === 0 && dr < 0) return 2 // -r (Northwest)
-    if (dq < 0 && dr === 0) return 3 // -q (West)
-    if (dq < 0 && dr > 0) return 4 // -q, +r (Southwest)
-    if (dq === 0 && dr > 0) return 5 // +r (Southeast)
-
-    // General 60-degree sector projection for non-straight steps
-    const angle = Math.atan2(Math.sqrt(3) * (dr + dq / 2), (3 / 2) * dq)
-    // Pure integer discrete sector approximation:
-    let sector = Math.round((angle * 3) / Math.PI)
-    sector = ((sector % 6) + 6) % 6
-    return sector
+  }
+  return obj;
 }
 
-/**
- * Emits a sealed, deep-frozen optical PerceptCandidate receipt.
- */
-export function emitOpticalPerceptCandidate(
-    source: AxialCoord,
-    observer: AxialCoord,
-    transmissionReceipt: OpticalTransmissionReceipt,
-    provenance?: { topologyRootHash?: string; overlayRootHash?: string },
-): PerceptCandidate {
-    const sourcePacked = packAxial(source.q, source.r)
-    const observerPacked = packAxial(observer.q, observer.r)
+export const initReceipt = (
+  cpy: ReceiptModel,
+  bal?: ReceiptBit,
+  ste?: State
+): ReceiptModel => {
+  cpy.totalPathReceiptsMinted = 0;
+  cpy.totalPerceptReceiptsMinted = 0;
+  cpy.totalDisplacementReceiptsMinted = 0;
+  cpy.lastMintedTimestamp = 0;
 
-    // Optical transmission is in basis points [0..10000]; scale down to per-mille [0..1000]
-    const qualityPermille = Math.trunc(transmissionReceipt.transmissionBps / 10)
-    const isOccluded = !transmissionReceipt.isVisible || qualityPermille === 0
-    const arrivalBearing = calculateAxialArrivalBearing(observer, source)
+  if (bal?.slv) {
+    bal.slv({ rcpBit: { idx: 'init-receipt-success', val: 1 } });
+  }
+  return cpy;
+};
 
-    const rawCandidate = {
-        channel: 'OPTICAL' as const,
-        sourceCoord: { q: source.q, r: source.r },
-        sourcePacked,
-        observerCoord: { q: observer.q, r: observer.r },
-        observerPacked,
-        qualityPermille,
-        arrivalBearing,
-        isOccluded,
-        opticalEvidence: {
-            transmissionBps: transmissionReceipt.transmissionBps,
-            pathLength: transmissionReceipt.pathLength,
-            severedAtCell: transmissionReceipt.severedAtCell,
+export const mintPathReceipt = (
+  cpy: ReceiptModel,
+  bal?: ReceiptBit,
+  ste?: State
+): ReceiptModel => {
+  const candidate = bal?.dat?.pathReceipt;
+  const parsed = PathReceiptSchema.safeParse(candidate);
+
+  if (!parsed.success) {
+    if (bal?.slv) {
+      bal.slv({
+        rcpBit: {
+          idx: 'mint-path-receipt-fail',
+          val: 0,
+          dat: { error: `[PATH_RECEIPT_SCHEMA_BREACH] ${parsed.error.errors.map((e) => e.message).join('; ')}` },
         },
-        topologyRootHash: provenance?.topologyRootHash,
-        overlayRootHash: provenance?.overlayRootHash,
+      });
     }
+    return cpy;
+  }
 
-    const parsed = PerceptCandidateSchema.parse(rawCandidate)
-    return deepFreeze(parsed) as unknown as PerceptCandidate
-}
+  const sealedReceipt = deepFreezeReceipt(parsed.data as PathReceipt);
+  cpy.totalPathReceiptsMinted += 1;
+  cpy.lastMintedTimestamp = Date.now();
 
-/**
- * Emits a sealed, deep-frozen acoustic PerceptCandidate receipt.
- */
-export function emitAcousticPerceptCandidate(
-    auditoryReceipt: AuditoryPerceptReceipt,
-    ambientFloorCdb: number,
-    hops: number = 1,
-    provenance?: { topologyRootHash?: string; overlayRootHash?: string },
-): PerceptCandidate {
-    const source = auditoryReceipt.sourceCoord
-    const observer = auditoryReceipt.listenerCoord
-    const sourcePacked = auditoryReceipt.sourcePacked
-    const observerPacked = auditoryReceipt.listenerPacked
+  if (bal?.slv) {
+    bal.slv({
+      rcpBit: {
+        idx: 'mint-path-receipt-success',
+        val: 1,
+        dat: { pathReceipt: sealedReceipt },
+      },
+    });
+  }
+  return cpy;
+};
 
-    const isCoLocated = sourcePacked === observerPacked
-    const arrivalBearing = isCoLocated
-        ? null
-        : auditoryReceipt.absoluteArrivalBearing
-    const isOccluded = !auditoryReceipt.isAudible
+export const mintPerceptReceipt = (
+  cpy: ReceiptModel,
+  bal?: ReceiptBit,
+  ste?: State
+): ReceiptModel => {
+  const candidate = bal?.dat?.perceptCandidate;
+  const parsed = PerceptCandidateSchema.safeParse(candidate);
 
-    const rawCandidate = {
-        channel: 'ACOUSTIC' as const,
-        sourceCoord: { q: source.q, r: source.r },
-        sourcePacked,
-        observerCoord: { q: observer.q, r: observer.r },
-        observerPacked,
-        qualityPermille: auditoryReceipt.auditoryQualityPermille,
-        arrivalBearing,
-        isOccluded,
-        acousticEvidence: {
-            arrivingIntensityCdb: auditoryReceipt.arrivingIntensityCdb,
-            ambientNoiseFloorCdb: ambientFloorCdb as any,
-            snrMarginCdb: auditoryReceipt.signalToNoiseRatioCdb,
-            hops,
+  if (!parsed.success) {
+    if (bal?.slv) {
+      bal.slv({
+        rcpBit: {
+          idx: 'mint-percept-receipt-fail',
+          val: 0,
+          dat: { error: `[PERCEPT_RECEIPT_SCHEMA_BREACH] ${parsed.error.errors.map((e) => e.message).join('; ')}` },
         },
-        topologyRootHash: provenance?.topologyRootHash,
-        overlayRootHash: provenance?.overlayRootHash,
+      });
     }
+    return cpy;
+  }
 
-    const parsed = PerceptCandidateSchema.parse(rawCandidate)
-    return deepFreeze(parsed) as unknown as PerceptCandidate
-}
+  const sealedCandidate = deepFreezeReceipt(parsed.data as PerceptCandidate);
+  cpy.totalPerceptReceiptsMinted += 1;
+  cpy.lastMintedTimestamp = Date.now();
 
-/**
- * Summarizes a batch of emitted sensory candidates.
- */
-export function summarizeReceiptBatch(
-    candidates: readonly PerceptCandidate[],
-): ReceiptBatchSummary {
-    let opticalCount = 0
-    let acousticCount = 0
-    let occludedCount = 0
-    let totalQuality = 0
+  if (bal?.slv) {
+    bal.slv({
+      rcpBit: {
+        idx: 'mint-percept-receipt-success',
+        val: 1,
+        dat: { perceptCandidate: sealedCandidate },
+      },
+    });
+  }
+  return cpy;
+};
 
-    for (let i = 0; i < candidates.length; i++) {
-        const c = candidates[i]
-        if (c.channel === 'OPTICAL') opticalCount++
-        if (c.channel === 'ACOUSTIC') acousticCount++
-        if (c.isOccluded) occludedCount++
-        totalQuality += c.qualityPermille
+export const mintDisplacementReceipt = (
+  cpy: ReceiptModel,
+  bal?: ReceiptBit,
+  ste?: State
+): ReceiptModel => {
+  const candidate = bal?.dat?.displacementReceipt;
+  const parsed = DisplacementReceiptSchema.safeParse(candidate);
+
+  if (!parsed.success) {
+    if (bal?.slv) {
+      bal.slv({
+        rcpBit: {
+          idx: 'mint-displacement-receipt-fail',
+          val: 0,
+          dat: { error: `[DISPLACEMENT_RECEIPT_SCHEMA_BREACH] ${parsed.error.errors.map((e) => e.message).join('; ')}` },
+        },
+      });
     }
+    return cpy;
+  }
 
-    const averageQualityPermille =
-        candidates.length > 0 ? Math.trunc(totalQuality / candidates.length) : 0
+  const sealedDisplacement = deepFreezeReceipt(parsed.data as DisplacementReceipt);
+  cpy.totalDisplacementReceiptsMinted += 1;
+  cpy.lastMintedTimestamp = Date.now();
 
-    return {
-        totalCandidates: candidates.length,
-        opticalCandidates: opticalCount,
-        acousticCandidates: acousticCount,
-        occludedCount,
-        averageQualityPermille,
-    }
-}
+  if (bal?.slv) {
+    bal.slv({
+      rcpBit: {
+        idx: 'mint-displacement-receipt-success',
+        val: 1,
+        dat: { displacementReceipt: sealedDisplacement },
+      },
+    });
+  }
+  return cpy;
+};

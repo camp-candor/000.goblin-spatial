@@ -17,7 +17,7 @@ import {
 } from '../../14.port.unit/fce/port.interface.js'
 import { scrubAndValidateSpatialQuery } from '../../14.port.unit/buz/port.buzz.js'
 import { PerceptCandidate } from '../../42.receipt.unit/fce/receipt.interface.js'
-import { emitOpticalPerceptCandidate } from '../../42.receipt.unit/buz/receipt.buzz.js'
+
 import { computeOpticalTransmission } from '../../40.witness.unit/buz/witness.buzz.js'
 import { AcousticWavefrontResult } from '../../13.sound.unit/fce/sound.interface.js'
 import { computeAcousticWavefront } from '../../13.sound.unit/buz/sound.buzz.js'
@@ -123,15 +123,28 @@ export class SpatialKernelInvoker implements PureSpatialKernel {
             () => 0 as any,
         )
 
-        return emitOpticalPerceptCandidate(
-            query.origin,
-            query.target,
-            transmission,
-            {
-                topologyRootHash: topoHash,
-                overlayRootHash: ovlHash,
+
+        const arrivalBearing = query.origin.q === query.target.q && query.origin.r === query.target.r ? null : 0;
+
+        return {
+            sourceCoord: query.origin,
+            observerCoord: query.target,
+            qualityScorePerMille: Math.trunc(transmission.transmissionBps / 10),
+            arrivalBearing: arrivalBearing as any,
+            isOccluded: !transmission.isVisible || transmission.transmissionBps === 0,
+            evidence: {
+                modality: 'OPTICAL',
+                transmissionBps: transmission.transmissionBps,
+                topologicalDistance: transmission.pathLength,
+                occludingBarrierCoord: null
             },
-        )
+            auditQuadruple: {
+                topologyHash: topoHash,
+                overlayHash: ovlHash,
+                queryHash: 'placeholder',
+                receiptHash: 'placeholder'
+            }
+        };
     }
 
     public executeAcousticWavefront(
