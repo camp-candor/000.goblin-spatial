@@ -1,225 +1,246 @@
-import crypto from 'node:crypto'
+import { createHash } from 'node:crypto';
+import { LedgerModel } from '../ledger.model.js';
+import type LedgerBit from '../fce/ledger.bit.js';
+import type State from '../../99.core/state.js';
 import {
-    LedgerModel,
-    DEFAULT_KERNEL_VERSION,
-    GENESIS_PREFIX,
-} from '../val/ledger.model.js'
-import LedgerBit from '../fce/ledger.bit.js'
-import State from '../../99.core/state.js'
+  SpatialAuditQuadruple,
+  SpatialLedgerEntry,
+  LineageVerificationResult,
+} from '../fce/ledger.interface.js';
 import {
-    SpatialAuditQuadruple,
-    SpatialLedgerEntry,
-    HashChainVerificationResult,
-    LedgerLoggerOptions,
-} from '../fce/ledger.interface.js'
+  GENESIS_HASH_64,
+  SpatialAuditQuadrupleSchema,
+  SpatialLedgerEntrySchema,
+} from '../val/ledger.model.js';
 
-export const initLedger = (cpy: LedgerModel, bal: LedgerBit, ste: State) => {
-    debugger
-    return cpy
+/**
+ * RFC 8785 JSON Canonicalization Scheme (JCS) Serializer.
+ * Enforces lexicographical key sorting by UTF-16 code units and Unicode NFC normalization.
+ */
+export function canonicalizeJson(obj: unknown): string {
+
+  if (obj === undefined) return '';
+  if (obj === null) return 'null';
+
+
+  if (typeof obj === 'number') {
+    if (!Number.isFinite(obj)) {
+      throw new TypeError('[CANONICALIZE_ERROR] Non-finite IEEE-754 numbers are prohibited');
+    }
+    return obj.toString();
+  }
+
+  if (typeof obj === 'boolean') {
+    return obj ? 'true' : 'false';
+  }
+
+  if (typeof obj === 'string') {
+    return JSON.stringify(obj.normalize('NFC'));
+  }
+
+  if (Array.isArray(obj)) {
+    return `[${obj.map((el) => canonicalizeJson(el)).join(',')}]`;
+  }
+
+  if (typeof obj === 'object') {
+    const objDict = obj as Record<string, unknown>;
+    const sortedKeys = Object.keys(objDict)
+      .filter((key) => objDict[key] !== undefined)
+      .sort((a, b) => {
+      const minLen = Math.min(a.length, b.length);
+      for (let i = 0; i < minLen; i++) {
+        const codeA = a.charCodeAt(i);
+        const codeB = b.charCodeAt(i);
+        if (codeA !== codeB) return codeA - codeB;
+      }
+      return a.length - b.length;
+    });
+
+    const entries = sortedKeys.map(
+      (key) => `${JSON.stringify(key.normalize('NFC'))}:${canonicalizeJson((obj as any)[key])}`
+    );
+    return `{${entries.join(',')}}`;
+  }
+
+  throw new TypeError(`[CANONICALIZE_ERROR] Unsupported datatype: ${typeof obj}`);
 }
 
-export const updateLedger = (cpy: LedgerModel, bal: LedgerBit, ste: State) => {
-    return cpy
+export function computeSha256Hex(content: string): string {
+  return createHash('sha256').update(content, 'utf8').digest('hex');
 }
 
 /**
- * Allocation-free little-endian UTF-16 byte lexicographic comparison.
- * Byte-identical ordering to Buffer.compare(Buffer.from(a, 'utf16le'),
- * Buffer.from(b, 'utf16le')): compares low byte first, then high byte per
- * code unit, with shorter-is-first prefix rule.
+ * Computes chained event hash: SHA-256(prevEventHash || CanonicalJCS(entryWithoutHash)).
  */
-function compareUtf16leBytes(a: string, b: string): number {
-    const n = Math.min(a.length, b.length)
-    for (let i = 0; i < n; i++) {
-        const ca = a.charCodeAt(i)
-        const cb = b.charCodeAt(i)
-        if (ca !== cb) {
-            const loA = ca & 0xff
-            const loB = cb & 0xff
-            if (loA !== loB) return loA - loB
-            return (ca >>> 8) - (cb >>> 8)
-        }
-    }
-    return a.length - b.length
+export function sealLedgerEntry(
+  entryWithoutHash: Omit<SpatialLedgerEntry, 'chainedEventHash'>
+): SpatialLedgerEntry {
+  const canonicalPayload = canonicalizeJson(entryWithoutHash);
+  const chainedEventHash = computeSha256Hex(`${entryWithoutHash.prevEventHash}${canonicalPayload}`);
+
+  return Object.freeze({
+    ...entryWithoutHash,
+    chainedEventHash,
+  });
 }
 
-export function canonicalizeJCS(obj: any): string {
-    if (obj === null) return 'null'
-    if (typeof obj === 'boolean') return obj ? 'true' : 'false'
-    if (typeof obj === 'string') return JSON.stringify(obj)
-    if (typeof obj === 'number') {
-        if (!Number.isFinite(obj)) {
-            throw new Error('NaN or Infinity not allowed in RFC 8785')
-        }
-        if (!Number.isInteger(obj)) {
-            throw new TypeError(
-                'JCS_NON_INTEGER_OR_NON_FINITE: Non-integer finite number rejected in RFC 8785 canonicalization',
-            )
-        }
-        if (Object.is(obj, -0)) return '0'
-        return JSON.stringify(obj)
+/**
+ * Validates cryptographic lineage across entire recorded ledger entries.
+ */
+export function verifyLedgerLineage(entries: readonly SpatialLedgerEntry[]): LineageVerificationResult {
+  if (entries.length === 0) {
+    return { valid: true, totalEntries: 0 };
+  }
+
+  let expectedPrevHash = GENESIS_HASH_64;
+
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i];
+    const expectedSequence = i + 1;
+
+    if (entry.sequenceNumber !== expectedSequence) {
+      return {
+        valid: false,
+        totalEntries: entries.length,
+        brokenSequenceIndex: i,
+        failureReason: `[SEQUENCE_DISCONTINUITY] Expected sequence ${expectedSequence}, found ${entry.sequenceNumber}`,
+      };
     }
-    if (Array.isArray(obj)) {
-        return (
-            '[' +
-            obj
-                .map((item) =>
-                    canonicalizeJCS(item === undefined ? null : item),
-                )
-                .join(',') +
-            ']'
-        )
+
+    if (entry.prevEventHash !== expectedPrevHash) {
+      return {
+        valid: false,
+        totalEntries: entries.length,
+        brokenSequenceIndex: i,
+        expectedHash: expectedPrevHash,
+        actualHash: entry.prevEventHash,
+        failureReason: `[PREV_HASH_MISMATCH] Entry ${i + 1} prevEventHash does not match expected lineage`,
+      };
     }
-    if (typeof obj === 'object') {
-        const keys = Object.keys(obj).sort(compareUtf16leBytes)
-        const keyValues = []
-        for (const k of keys) {
-            if (obj[k] !== undefined) {
-                keyValues.push(
-                    JSON.stringify(k) + ':' + canonicalizeJCS(obj[k]),
-                )
-            }
-        }
-        return '{' + keyValues.join(',') + '}'
+
+    const { chainedEventHash, ...payloadWithoutHash } = entry;
+    const recalculatedHash = computeSha256Hex(`${entry.prevEventHash}${canonicalizeJson(payloadWithoutHash)}`);
+
+    if (recalculatedHash !== chainedEventHash) {
+      return {
+        valid: false,
+        totalEntries: entries.length,
+        brokenSequenceIndex: i,
+        expectedHash: recalculatedHash,
+        actualHash: chainedEventHash,
+        failureReason: `[CHAIN_HASH_CORRUPTION] Entry ${i + 1} hash tampering detected`,
+      };
     }
-    throw new Error('Unsupported type')
+
+    expectedPrevHash = chainedEventHash;
+  }
+
+  return { valid: true, totalEntries: entries.length };
 }
 
-export function sha256Hex(data: string): string {
-    return crypto.createHash('sha256').update(data).digest('hex')
-}
+export const initLedger = (
+  cpy: LedgerModel,
+  bal?: LedgerBit,
+  ste?: State
+): LedgerModel => {
+  cpy.headSequence = 0;
+  cpy.lastEventHash = GENESIS_HASH_64;
+  cpy.totalEntriesCommitted = 0;
+  cpy.entries = Object.freeze([]);
 
-export function computeGenesisHash(streamId: string): string {
-    return sha256Hex(`${GENESIS_PREFIX}${streamId}`)
-}
+  if (bal?.slv) {
+    bal.slv({ ldgBit: { idx: 'init-ledger-success', val: 1 } });
+  }
+  return cpy;
+};
 
-export function mintEntryHash(
-    prevHash: string,
-    seq: number,
-    tick: number,
-    streamId: string,
-    queryType: string,
-    quadruple: SpatialAuditQuadruple,
-    kernelVersion: string,
-): string {
-    return sha256Hex(
-        prevHash +
-            seq.toString() +
-            tick.toString() +
-            streamId +
-            queryType +
-            canonicalizeJCS(quadruple) +
-            kernelVersion,
-    )
-}
+export const appendEntry = (
+  cpy: LedgerModel,
+  bal?: LedgerBit,
+  ste?: State
+): LedgerModel => {
+  const quadruple = bal?.dat?.auditQuadruple;
+  const queryType = bal?.dat?.queryType ?? 'RAYCAST';
+  const tickNumber = bal?.dat?.tickNumber ?? 0;
+  const streamId = bal?.dat?.streamId ?? 'spatial-default-stream';
 
-export class SpatialLedgerLogger {
-    private streamId: string
-    private kernelVersion: string
-    private headHash: string
-    private entries: SpatialLedgerEntry[] = []
-    private seqCounter: number = 0
-
-    constructor(options: LedgerLoggerOptions) {
-        this.streamId = options.streamId
-        this.kernelVersion = options.kernelVersion || DEFAULT_KERNEL_VERSION
-        this.headHash = computeGenesisHash(this.streamId)
+  const quadParsed = SpatialAuditQuadrupleSchema.safeParse(quadruple);
+  if (!quadParsed.success) {
+    if (bal?.slv) {
+      bal.slv({
+        ldgBit: {
+          idx: 'append-entry-fail',
+          val: 0,
+          dat: { error: `[QUADRUPLE_SCHEMA_BREACH] ${quadParsed.error.errors.map((e) => e.message).join('; ')}` },
+        },
+      });
     }
+    return cpy;
+  }
 
-    public getGenesisHash(): string {
-        return computeGenesisHash(this.streamId)
+  const nextSequence = cpy.headSequence + 1;
+  const unsealedEntry: Omit<SpatialLedgerEntry, 'chainedEventHash'> = {
+    sequenceNumber: nextSequence,
+    tickNumber,
+    streamId,
+    queryType,
+    auditQuadruple: quadParsed.data as SpatialAuditQuadruple,
+    kernelVersion: 'v1.0.0-spatial-oracle',
+    prevEventHash: cpy.lastEventHash,
+    recordedAtMs: Date.now(),
+  };
+
+  const sealedEntry = sealLedgerEntry(unsealedEntry);
+
+  const validatedEntryResult = SpatialLedgerEntrySchema.safeParse(sealedEntry);
+  if (!validatedEntryResult.success) {
+    if (bal?.slv) {
+      bal.slv({
+        ldgBit: {
+          idx: 'append-entry-fail',
+          val: 0,
+          dat: { error: `[ENTRY_SCHEMA_BREACH] ${validatedEntryResult.error.errors.map((e) => e.message).join('; ')}` },
+        },
+      });
     }
+    return cpy;
+  }
+  const validatedEntry = validatedEntryResult.data as SpatialLedgerEntry;
 
-    public getHeadHash(): string {
-        return this.headHash
-    }
 
-    public getEntries(): readonly SpatialLedgerEntry[] {
-        return this.entries
-    }
+  const updatedEntries = [...cpy.entries, validatedEntry];
+  cpy.entries = Object.freeze(updatedEntries);
+  cpy.headSequence = nextSequence;
+  cpy.lastEventHash = sealedEntry.chainedEventHash;
+  cpy.totalEntriesCommitted = updatedEntries.length;
 
-    public appendEntry(
-        tick: number,
-        queryType: string,
-        quadruple: SpatialAuditQuadruple,
-    ): SpatialLedgerEntry {
-        this.seqCounter++
-        const eventHash = mintEntryHash(
-            this.headHash,
-            this.seqCounter,
-            tick,
-            this.streamId,
-            queryType,
-            quadruple,
-            this.kernelVersion,
-        )
+  if (bal?.slv) {
+    bal.slv({
+      ldgBit: {
+        idx: 'append-entry-success',
+        val: 1,
+        dat: { entry: validatedEntry },
+      },
+    });
+  }
+  return cpy;
+};
 
-        const entry: SpatialLedgerEntry = {
-            seq: this.seqCounter,
-            tick,
-            streamId: this.streamId,
-            queryType,
-            quadruple,
-            kernelVersion: this.kernelVersion,
-            eventHash,
-        }
+export const verifyLineage = (
+  cpy: LedgerModel,
+  bal?: LedgerBit,
+  ste?: State
+): LedgerModel => {
+  const result = verifyLedgerLineage(cpy.entries);
 
-        Object.freeze(entry.quadruple)
-        Object.freeze(entry)
-
-        this.entries.push(entry)
-        this.headHash = eventHash
-        return entry
-    }
-}
-
-export function createSpatialLedgerLogger(
-    options: LedgerLoggerOptions,
-): SpatialLedgerLogger {
-    return new SpatialLedgerLogger(options)
-}
-
-export function verifyLedgerIntegrity(
-    entries: SpatialLedgerEntry[],
-    streamId: string,
-): HashChainVerificationResult {
-    if (entries.length === 0) return { valid: true }
-
-    let currentHash = computeGenesisHash(streamId)
-    let expectedSeq = 1
-
-    for (let i = 0; i < entries.length; i++) {
-        const entry = entries[i]
-
-        if (entry.seq !== expectedSeq) {
-            return {
-                valid: false,
-                error: `Sequence gap detected at index ${i}`,
-                invalidSequenceIdx: i,
-            }
-        }
-
-        const expectedHash = mintEntryHash(
-            currentHash,
-            entry.seq,
-            entry.tick,
-            entry.streamId,
-            entry.queryType,
-            entry.quadruple,
-            entry.kernelVersion,
-        )
-
-        if (entry.eventHash !== expectedHash) {
-            return {
-                valid: false,
-                error: `Hash mismatch at sequence ${entry.seq}`,
-                invalidSequenceIdx: i,
-            }
-        }
-
-        currentHash = entry.eventHash
-        expectedSeq++
-    }
-
-    return { valid: true }
-}
+  if (bal?.slv) {
+    bal.slv({
+      ldgBit: {
+        idx: result.valid ? 'verify-lineage-success' : 'verify-lineage-fail',
+        val: result.valid ? 1 : 0,
+        dat: { verificationResult: result, error: result.failureReason },
+      },
+    });
+  }
+  return cpy;
+};

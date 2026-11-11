@@ -7,8 +7,8 @@ import {
 } from '../../00.spatial.unit/buz/spatial.buzz.js'
 import { PerceptCandidate } from '../../42.receipt.unit/fce/receipt.interface.js'
 import {
-    canonicalizeJCS,
-    sha256Hex,
+    canonicalizeJson,
+    computeSha256Hex,
 } from '../../19.ledger.unit/buz/ledger.buzz.js'
 import { ScrubbedRaycastQuery } from '../../14.port.unit/fce/port.interface.js'
 import { toBasisPoints } from '../../40.witness.unit/val/witness.model.js'
@@ -79,10 +79,10 @@ export function createReceiptVerificationAction(
             const quad = receipt.auditQuadruple
 
             // 1. Recalculate RFC 8785 Canonical JCS SHA-256 Hashes
-            const computedQueryJcs = canonicalizeJCS(rawQuery)
-            const computedReceiptJcs = canonicalizeJCS(percept)
-            const computedQueryHash = sha256Hex(computedQueryJcs)
-            const computedReceiptHash = sha256Hex(computedReceiptJcs)
+            const computedQueryJcs = canonicalizeJson(rawQuery)
+            const computedReceiptJcs = canonicalizeJson(percept)
+            const computedQueryHash = computeSha256Hex(computedQueryJcs)
+            const computedReceiptHash = computeSha256Hex(computedReceiptJcs)
 
             // 2. Parity Verifications
             const queryMatch = computedQueryHash === quad.queryHash

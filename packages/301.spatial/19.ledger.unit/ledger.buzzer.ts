@@ -1,9 +1,9 @@
-export { initLedger } from './buz/ledger.buzz.js'
-export { updateLedger } from './buz/ledger.buzz.js'
-export { canonicalizeJCS } from './buz/ledger.buzz.js'
-export { sha256Hex } from './buz/ledger.buzz.js'
-export { computeGenesisHash } from './buz/ledger.buzz.js'
-export { mintEntryHash } from './buz/ledger.buzz.js'
-export { SpatialLedgerLogger } from './buz/ledger.buzz.js'
-export { verifyLedgerIntegrity } from './buz/ledger.buzz.js'
-export { createSpatialLedgerLogger } from './buz/ledger.buzz.js'
+export {
+  canonicalizeJson,
+  computeSha256Hex,
+  sealLedgerEntry,
+  verifyLedgerLineage,
+  initLedger,
+  appendEntry,
+  verifyLineage,
+} from './buz/ledger.buzz.js';

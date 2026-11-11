@@ -16,7 +16,7 @@ import {
 } from '../../00.spatial.unit/fce/spatial.interface.js'
 import { createSpatialKernel } from '../../00.spatial.unit/buz/spatial.buzz.js'
 import { PerceptCandidate } from '../../42.receipt.unit/fce/receipt.interface.js'
-import { sha256Hex } from '../../19.ledger.unit/buz/ledger.buzz.js'
+import { computeSha256Hex } from '../../19.ledger.unit/buz/ledger.buzz.js'
 
 function deepFreeze<T>(obj: T): Readonly<T> {
     if (obj === null || typeof obj !== 'object') {
@@ -90,7 +90,7 @@ export class SpatialBatchCollector implements SpatialBatchAggregator {
                 ? Math.trunc(totalDurationMicros / totalQueries)
                 : 0
 
-        const batchAuditHash = sha256Hex(
+        const batchAuditHash = computeSha256Hex(
             `BATCH::${parsedEnvelope.batchId}::${receiptHashes.join('|')}`,
         )
 
