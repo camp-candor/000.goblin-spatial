@@ -26,8 +26,8 @@ export class TopologyDatabase {
     }
 
     const frozen = deepFreeze(validation.manifest);
-    this.store.set(frozen.rootHash, frozen);
-    this.activeRootHash = frozen.rootHash;
+    this.store.set(frozen.merkleRootHex, frozen);
+    this.activeRootHash = frozen.merkleRootHex;
     return frozen;
   }
 

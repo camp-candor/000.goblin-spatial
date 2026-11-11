@@ -16,7 +16,7 @@ import {
     SpatialAuditQuadruple,
     SpatialLedgerEntry,
 } from '../../19.ledger.unit/fce/ledger.interface.js'
-import { DynamicOverlay } from '../../38.types.unit/fce/manifest.schema.js'
+import { DynamicOverlay } from '../../38.types.unit/fce/overlay.schema.js'
 import SpatialBit from './spatial.bit.js'
 
 export default interface Spatial {

@@ -10,7 +10,7 @@ import {
     axialToDoubled,
 } from '../../28.axial.unit/buz/axial.buzz.js'
 import { AXIAL_DIRECTIONS } from '../../46.neighbor.unit/buz/neighbor.buzz.js'
-import { DynamicOverlay } from '../../38.types.unit/fce/manifest.schema.js'
+import { DynamicOverlay } from '../../38.types.unit/fce/overlay.schema.js'
 import {
     compareTieBreakNodes,
     TieBreakNode,

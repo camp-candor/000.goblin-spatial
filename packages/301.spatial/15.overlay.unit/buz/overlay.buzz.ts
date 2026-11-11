@@ -1,11 +1,16 @@
-import {
-  DynamicOverlay,
-  DynamicOverlaySchema,
-  PortalEdge,
-  OccluderDefinition
-} from '../../38.types.unit/fce/manifest.schema.js';
+import { PortalEdge, OccluderDefinition } from '../../38.types.unit/fce/manifest.schema.js';
+import { DynamicOverlay, DynamicOverlaySchema } from '../../38.types.unit/fce/overlay.schema.js';
 
 export function createEmptyOverlay(overlayId: string): DynamicOverlay {
+  return DynamicOverlaySchema.parse({
+    overlayId,
+    parentTopologyHash: "0000000000000000000000000000000000000000000000000000000000000000",
+    occluderOverrides: {},
+    portalOverrides: {},
+    attenuationDeltasCdb: {}
+  });
+}
+/*
   return DynamicOverlaySchema.parse({
     overlayId,
     occluderOverrides: {},
@@ -14,6 +19,7 @@ export function createEmptyOverlay(overlayId: string): DynamicOverlay {
   });
 }
 
+*/
 export function setOccluderOverride(
   overlay: DynamicOverlay,
   occluderId: string,
