@@ -1,1 +1,2 @@
-export default interface Model {}
+export interface Model {}
+export default Model

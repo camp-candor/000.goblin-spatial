@@ -1,2 +1,1 @@
-export { initPort } from './buz/port.buzz'
-export { updatePort } from './buz/port.buzz'
+export { initPort, sanitizeQuery, executeQuery } from './buz/port.buzz.js'

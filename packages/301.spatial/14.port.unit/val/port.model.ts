@@ -1,8 +1,5 @@
 import { z } from 'zod'
-import { toBasisPoints } from '../../40.witness.unit/val/witness.model.js'
-import { toCentiDecibels } from '../../13.sound.unit/val/sound.model.js'
-import { BasisPoints } from '../../40.witness.unit/fce/witness.interface.js'
-import { CentiDecibels } from '../../13.sound.unit/fce/sound.interface.js'
+import { AxialCoordSchema } from '../../38.types.unit/fce/manifest.schema.js'
 
 export const StrictAxialCoordSchema = z
     .object({
@@ -12,162 +9,132 @@ export const StrictAxialCoordSchema = z
     })
     .strict()
 
-export const StrictRaycastQuerySchema: z.ZodObject<
-    {
-        queryType: z.ZodLiteral<'RAYCAST'>
-        origin: typeof StrictAxialCoordSchema
-        target: typeof StrictAxialCoordSchema
-        thresholdBps: z.ZodEffects<
-            z.ZodOptional<z.ZodNumber>,
-            BasisPoints | undefined,
-            number | undefined
-        >
-        calculationMode: z.ZodOptional<
-            z.ZodEnum<['SUBTRACTIVE_LINEAR', 'MULTIPLICATIVE_BEER_LAMBERT']>
-        >
-    },
-    'strict'
-> = z
-    .object({
-        queryType: z.literal('RAYCAST'),
-        origin: StrictAxialCoordSchema,
-        target: StrictAxialCoordSchema,
-        thresholdBps: z
-            .number()
-            .int()
-            .min(0)
-            .max(10000)
-            .optional()
-            .transform((val) =>
-                val !== undefined ? toBasisPoints(val) : undefined,
-            ),
-        calculationMode: z
-            .enum(['SUBTRACTIVE_LINEAR', 'MULTIPLICATIVE_BEER_LAMBERT'])
-            .optional(),
-    })
-    .strict()
-
-export const StrictAcousticQuerySchema: z.ZodObject<
-    {
-        queryType: z.ZodLiteral<'ACOUSTIC_WAVEFRONT'>
-        sourceCoord: typeof StrictAxialCoordSchema
-        sourceIntensityCdb: z.ZodEffects<z.ZodNumber, CentiDecibels, number>
-        ambientNoiseFloorCdb: z.ZodEffects<z.ZodNumber, CentiDecibels, number>
-        hearingThresholdCdb: z.ZodEffects<
-            z.ZodOptional<z.ZodNumber>,
-            CentiDecibels | undefined,
-            number | undefined
-        >
-        snrMinCdb: z.ZodEffects<
-            z.ZodOptional<z.ZodNumber>,
-            CentiDecibels | undefined,
-            number | undefined
-        >
-        workEnvelopeLimit: z.ZodDefault<z.ZodNumber>
-    },
-    'strict'
-> = z
-    .object({
-        queryType: z.literal('ACOUSTIC_WAVEFRONT'),
-        sourceCoord: StrictAxialCoordSchema,
-        sourceIntensityCdb: z
-            .number()
-            .int()
-            .min(0)
-            .max(12000)
-            .transform((val) => toCentiDecibels(val)),
-        ambientNoiseFloorCdb: z
-            .number()
-            .int()
-            .min(0)
-            .max(12000)
-            .transform((val) => toCentiDecibels(val)),
-        hearingThresholdCdb: z
-            .number()
-            .int()
-            .min(0)
-            .max(12000)
-            .optional()
-            .transform((val) =>
-                val !== undefined ? toCentiDecibels(val) : undefined,
-            ),
-        snrMinCdb: z
-            .number()
-            .int()
-            .min(0)
-            .max(6000)
-            .optional()
-            .transform((val) =>
-                val !== undefined ? toCentiDecibels(val) : undefined,
-            ),
-        workEnvelopeLimit: z.number().int().positive().max(2048).default(512),
-    })
-    .strict()
-
-export const StrictRoutingQuerySchema = z
-    .object({
-        queryType: z.literal('BOUNDED_PATH'),
-        origin: StrictAxialCoordSchema,
-        destination: StrictAxialCoordSchema,
-        maxBudgetCostUnits: z.number().int().positive(),
-        blockedCells: z.array(z.number().int()).optional(),
-        workEnvelopeLimit: z.number().int().positive().max(2048).default(512),
-        episodeSeed: z.number().int().optional(),
-    })
-    .strict()
-
-export const StrictReachabilityQuerySchema = z
-    .object({
-        queryType: z.literal('REACHABILITY'),
-        origin: StrictAxialCoordSchema,
-        budgetCostUnits: z.number().int().positive(),
-        blockedCells: z.array(z.number().int()).optional(),
-        workEnvelopeLimit: z.number().int().positive().max(2048).default(512),
-    })
-    .strict()
-
-export const StrictDisplacementQuerySchema = z
-    .object({
-        queryType: z.literal('DISPLACEMENT_EVICTION'),
-        congestedCell: StrictAxialCoordSchema,
-        budgetCostUnits: z.number().int().positive().default(1000),
-        blockedCells: z.array(z.number().int()).optional(),
-        workEnvelopeLimit: z.number().int().positive().max(2048).default(512),
-        seedDigest: z.number().int().optional(),
-    })
-    .strict()
-
-export const SpatialQueryDiscriminatorSchema: z.ZodDiscriminatedUnion<
-    'queryType',
-    [
-        typeof StrictRaycastQuerySchema,
-        typeof StrictAcousticQuerySchema,
-        typeof StrictRoutingQuerySchema,
-        typeof StrictReachabilityQuerySchema,
-        typeof StrictDisplacementQuerySchema,
-    ]
-> = z.discriminatedUnion('queryType', [
-    StrictRaycastQuerySchema,
-    StrictAcousticQuerySchema,
-    StrictRoutingQuerySchema,
-    StrictReachabilityQuerySchema,
-    StrictDisplacementQuerySchema,
-])
-
-/**
- * Prohibited narrative property blacklist for diagnostic identification.
- */
-export const BANNED_NARRATIVE_TAGS: readonly string[] = [
+export const BANNED_NARRATIVE_TAGS = Object.freeze([
+    'actorId',
+    'characterId',
+    'characterName',
+    'name',
+    'dialogue',
+    'speech',
+    'trauma',
+    'wound',
+    'emotion',
+    'inventory',
+    'item',
+    'relationship',
+    'grudge',
+    'intent',
+    'lore',
+    'prose',
     'character_id',
     'actor_id',
     'speaker_id',
     'dialogue_text',
-    'dialogue',
-    'emotion',
     'camera_parenthetical',
     'observable_parenthetical',
     'grievance_id',
     'somatic_condition',
     'narrative_state',
     'personality',
-] as const
+])
+
+export const StrictRaycastQuerySchema = z
+    .object({
+        queryType: z.literal('RAYCAST'),
+        origin: AxialCoordSchema,
+        target: AxialCoordSchema,
+        mode: z
+            .enum(['SUBTRACTIVE_LINEAR', 'MULTIPLICATIVE_BEER_LAMBERT'])
+            .default('SUBTRACTIVE_LINEAR'),
+    })
+    .strict()
+
+export const StrictRoutingQuerySchema = z
+    .object({
+        queryType: z.literal('BOUNDED_PATH'),
+        origin: AxialCoordSchema,
+        destination: AxialCoordSchema,
+        maxBudgetCostUnits: z
+            .number()
+            .int({
+                message:
+                    '[FLOAT_PROHIBITED] maxBudgetCostUnits must be an integer',
+            })
+            .positive({
+                message: '[BUDGET_INVALID] maxBudgetCostUnits must be positive',
+            }),
+        workEnvelopeLimit: z
+            .number()
+            .int({
+                message:
+                    '[FLOAT_PROHIBITED] workEnvelopeLimit must be an integer',
+            })
+            .positive()
+            .max(2048, {
+                message:
+                    '[WORK_LIMIT_EXCEEDED] Maximum work envelope ceiling is 2048',
+            })
+            .default(512),
+    })
+    .strict()
+
+export const StrictReachabilityQuerySchema = z
+    .object({
+        queryType: z.literal('REACHABILITY'),
+        origin: AxialCoordSchema,
+        maxStepRadius: z
+            .number()
+            .int({
+                message: '[FLOAT_PROHIBITED] maxStepRadius must be an integer',
+            })
+            .positive()
+            .max(128, {
+                message:
+                    '[RADIUS_LIMIT_EXCEEDED] Maximum reachability radius is 128',
+            }),
+        workEnvelopeLimit: z
+            .number()
+            .int({
+                message:
+                    '[FLOAT_PROHIBITED] workEnvelopeLimit must be an integer',
+            })
+            .positive()
+            .max(2048)
+            .default(512),
+    })
+    .strict()
+
+export const StrictDisplacementQuerySchema = z
+    .object({
+        queryType: z.literal('DISPLACEMENT'),
+        targetCell: AxialCoordSchema,
+        maxCellCapacity: z
+            .number()
+            .int({
+                message:
+                    '[FLOAT_PROHIBITED] maxCellCapacity must be an integer',
+            })
+            .positive(),
+        maxBudgetCostUnits: z
+            .number()
+            .int({
+                message:
+                    '[FLOAT_PROHIBITED] maxBudgetCostUnits must be an integer',
+            })
+            .positive(),
+    })
+    .strict()
+
+export const SpatialQueryDiscriminatorSchema = z.discriminatedUnion(
+    'queryType',
+    [
+        StrictRaycastQuerySchema,
+        StrictRoutingQuerySchema,
+        StrictReachabilityQuerySchema,
+        StrictDisplacementQuerySchema,
+    ],
+)
+
+export type ValidatedSpatialQuery = z.infer<
+    typeof SpatialQueryDiscriminatorSchema
+>
