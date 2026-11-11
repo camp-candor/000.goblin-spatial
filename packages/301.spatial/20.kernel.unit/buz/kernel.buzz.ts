@@ -1,5 +1,5 @@
 import { AxialCoord, PackedAxial } from '../../28.axial.unit/val/axial.model.js'
-import { DynamicOverlay } from '../../38.types.unit/fce/manifest.schema.js'
+import { DynamicOverlay } from '../../38.types.unit/fce/overlay.schema.js'
 import {
     findShortestBoundedPath,
     PathQueryOptions,

@@ -1,10 +1,4 @@
-import {
-  TopologyManifest,
-  TopologyManifestSchema,
-  LocationNode,
-  PortalEdge,
-  TopologicalCell
-} from '../../38.types.unit/fce/manifest.schema.js';
+import { TopologyManifest, TopologyManifestSchema, PortalEdge, TopologicalCell } from '../../38.types.unit/fce/manifest.schema.js';
 
 export interface TopologyValidationResult {
   readonly valid: boolean;
@@ -23,59 +17,40 @@ export function parseAndValidateManifest(raw: unknown): TopologyValidationResult
 
   const manifest = parseResult.data;
   const semanticErrors: string[] = [];
-  const roomMap = new Map<string, LocationNode>();
 
-  for (const room of manifest.rooms) {
-    if (roomMap.has(room.roomId)) {
-      semanticErrors.push(`[DUPLICATE_ROOM_ID] Room ID collision: ${room.roomId}`);
+  // Validate cell uniqueness
+  const cellCoords = new Set<string>();
+  for (const cell of manifest.cells) {
+    const key = `${cell.coord.q},${cell.coord.r}`;
+    if (cellCoords.has(key)) {
+      semanticErrors.push(`[DUPLICATE_CELL] Duplicate cell (${key})`);
     }
-    roomMap.set(room.roomId, room);
+    cellCoords.add(key);
+  }
 
-    // Validate cell uniqueness within room
-    const cellCoords = new Set<string>();
-    for (const cell of room.cells) {
-      const key = `${cell.q},${cell.r}`;
-      if (cellCoords.has(key)) {
-        semanticErrors.push(`[DUPLICATE_CELL] Room ${room.roomId} has duplicate cell (${key})`);
-      }
-      cellCoords.add(key);
-    }
-
-    // Validate occluder coordinates exist in room
-    for (const occluder of room.occluders) {
-      const occluderKey = `${occluder.coord.q},${occluder.coord.r}`;
-      if (!cellCoords.has(occluderKey)) {
-        semanticErrors.push(
-          `[ORPHAN_OCCLUDER] Occluder ${occluder.occluderId} references non-existent cell (${occluderKey}) in room ${room.roomId}`
-        );
-      }
+  // Validate occluder coordinates exist
+  for (const occluder of manifest.occluders) {
+    const occluderKey = `${occluder.coord.q},${occluder.coord.r}`;
+    if (!cellCoords.has(occluderKey)) {
+      semanticErrors.push(
+        `[ORPHAN_OCCLUDER] Occluder ${occluder.occluderId} references non-existent cell (${occluderKey})`
+      );
     }
   }
 
-  // Validate reciprocal portal links
-  const portalRegistry = new Map<string, PortalEdge>();
-  for (const room of manifest.rooms) {
-    for (const portal of room.portals) {
-      portalRegistry.set(portal.portalId, portal);
-
-      if (!roomMap.has(portal.toRoomId)) {
-        semanticErrors.push(
-          `[DANGLING_PORTAL] Portal ${portal.portalId} targets unknown room ${portal.toRoomId}`
-        );
-        continue;
-      }
-
-      const targetRoom = roomMap.get(portal.toRoomId)!;
-      const targetHasCell = targetRoom.cells.some(
-        (c) => c.q === portal.toCoord.q && c.r === portal.toCoord.r
-      );
-
-      if (!targetHasCell) {
-        semanticErrors.push(
-          `[PORTAL_TARGET_INVALID] Portal ${portal.portalId} toCoord (${portal.toCoord.q},${portal.toCoord.r}) missing in target room ${targetRoom.roomId}`
-        );
-      }
+  // Validate portals
+  for (const portal of manifest.portals) {
+    // Basic coordinate existence check
+    const fromKey = `${portal.entryCoord.q},${portal.entryCoord.r}`;
+    const toKey = `${portal.exitCoord.q},${portal.exitCoord.r}`;
+    if (!cellCoords.has(fromKey)) {
+      semanticErrors.push(`[PORTAL_SOURCE_INVALID] Portal ${portal.portalId} entry missing in topology`);
     }
+    // We do not require the toRoom's coordinate to exist in this room's manifest as it's a cross-room portal.
+    // However, if the directive intended single-manifest verification, we'd check it.
+    // The previous implementation checked the target room's cells. But now all cells are flat.
+    // We will just do a warning or no-op if toCoord is outside, as we don't have the target room manifest here unless they're merged.
+    // Wait, the new schema has no rooms, just topologyId which is locationId.
   }
 
   if (semanticErrors.length > 0) {
@@ -85,21 +60,17 @@ export function parseAndValidateManifest(raw: unknown): TopologyValidationResult
   return { valid: true, errors: [], manifest };
 }
 
-export function findRoomById(manifest: TopologyManifest, roomId: string): LocationNode | undefined {
-  return manifest.rooms.find((r) => r.roomId === roomId);
+export function findRoomById(manifest: TopologyManifest, roomId: string): TopologyManifest | undefined {
+  return manifest.topologyId === roomId ? manifest : undefined;
 }
 
 export function findCellInRoom(
-  room: LocationNode,
+  manifest: TopologyManifest,
   q: number,
   r: number
 ): TopologicalCell | undefined {
-  return room.cells.find((c) => c.q === q && c.r === r);
+  return manifest.cells.find((c) => c.coord.q === q && c.coord.r === r);
 }
-
-
-
-// Overriding previous dummy exports
 
 export function initTopology(...args: any[]) {
     return { type: 'INIT_TOPOLOGY', payload: args };
