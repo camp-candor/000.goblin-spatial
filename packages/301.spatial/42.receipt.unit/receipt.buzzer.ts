@@ -1,2 +1,7 @@
-export { initReceipt } from './buz/receipt.buzz'
-export { updateReceipt } from './buz/receipt.buzz'
+export {
+  deepFreezeReceipt,
+  initReceipt,
+  mintPathReceipt,
+  mintPerceptReceipt,
+  mintDisplacementReceipt,
+} from './buz/receipt.buzz.js';

@@ -94,7 +94,7 @@ export function createReceiptVerificationAction(
                 message: `:: Query Type: ${receipt.queryType} | Origin: (0,0) -> Target: (2,0)`,
             })
             bus.emit('TELEMETRY_LOG', {
-                message: `:: Percept: Modality=${percept.channel} | Quality=${percept.qualityPermille}/1000 | Occluded=${percept.isOccluded}`,
+                message: `:: Percept: Modality=${percept.evidence.modality} | Quality=${percept.qualityScorePerMille}/1000 | Occluded=${percept.isOccluded}`,
             })
             bus.emit('TELEMETRY_LOG', {
                 message: `:: Topology Root Hash: ${quad.topologyHash.slice(0, 16)}...`,

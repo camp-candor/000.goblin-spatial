@@ -35,7 +35,7 @@ describe('Task 8.4 In-Process Zero-Serialization Synchronous Invoker', () => {
         expect(receipt.ok).toBe(true)
         expect(receipt.queryType).toBe('RAYCAST')
         expect(receipt.result).toBeDefined()
-        expect(receipt.result.channel).toBe('OPTICAL')
+        expect(receipt.result.evidence.modality).toBe('OPTICAL')
         expect(receipt.auditQuadruple.queryHash).toMatch(/^[0-9a-f]{64}$/)
         expect(receipt.auditQuadruple.receiptHash).toMatch(/^[0-9a-f]{64}$/)
         expect(Object.isFrozen(receipt)).toBe(true)
