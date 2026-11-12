@@ -2,7 +2,7 @@
     "extends": "../../apps/995.library/tsconfig-base.json",
     "compilerOptions": {
         "target": "ES2022",
-        "outDir": "../dist/001.spatial",
+        "outDir": "../dist/301.spatial",
         "composite": true,
         "skipLibCheck": true,
         "noImplicitAny": false,

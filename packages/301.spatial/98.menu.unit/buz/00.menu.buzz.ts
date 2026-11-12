@@ -95,40 +95,43 @@ export const updateMenu = async (
     })
 
     const choiceBit = await lib.hunt(OPEN_CHOICE, {
-        dat: { clr0: 'black', clr1: 'green' },
+        dat: {
+            clr0: 'black',
+            clr1: 'green',
+            cb: async (focused: string) => {
+                let tooltip = '>> Ready.'
+                switch (focused) {
+                    case '[01] LOAD CANONICAL TOPOLOGY MANIFEST':
+                        tooltip =
+                            '>> [TOOLTIP] Verify static room manifests and Merkle root hashes.'
+                        break
+                    case '[02] RUN SYNCHRONOUS PORT PROBE':
+                        tooltip =
+                            '>> [TOOLTIP] Test Zero-Direct-Ingress firewall and 0-Promise execution.'
+                        break
+                    case '[03] EXECUTE 8,190-PAIR OPTICAL RECIPROCITY AUDIT':
+                        tooltip =
+                            '>> [TOOLTIP] Verify Helmholtz transmission symmetry across 91-cell lattice.'
+                        break
+                    case '[04] TEST WORK BUDGET TRIPWIRES':
+                        tooltip =
+                            '>> [TOOLTIP] Assert deterministic BUDGET_EXCEEDED halts on runaway paths.'
+                        break
+                    case '[05] RUN BATCH QUERY AGGREGATOR':
+                        tooltip =
+                            '>> [TOOLTIP] Aggregate heterogeneous queries with fault isolation and RFC 8785 audit hash.'
+                        break
+                    case '[ROOT MENU]':
+                        tooltip =
+                            '>> [TOOLTIP] Exit spatial cockpit back to root runner.'
+                        break
+                }
+                await lib.hunt(WRITE_CONSOLE, { idx: 'cns00', src: tooltip })
+            },
+        },
         src: 'vertical',
         lst: SPATIAL_MENU_CHOICES,
         net: gridBit?.grdBit?.dat,
-        cb: async (focused: string) => {
-            let tooltip = '>> Ready.'
-            switch (focused) {
-                case '[01] LOAD CANONICAL TOPOLOGY MANIFEST':
-                    tooltip =
-                        '>> [TOOLTIP] Verify static room manifests and Merkle root hashes.'
-                    break
-                case '[02] RUN SYNCHRONOUS PORT PROBE':
-                    tooltip =
-                        '>> [TOOLTIP] Test Zero-Direct-Ingress firewall and 0-Promise execution.'
-                    break
-                case '[03] EXECUTE 8,190-PAIR OPTICAL RECIPROCITY AUDIT':
-                    tooltip =
-                        '>> [TOOLTIP] Verify Helmholtz transmission symmetry across 91-cell lattice.'
-                    break
-                case '[04] TEST WORK BUDGET TRIPWIRES':
-                    tooltip =
-                        '>> [TOOLTIP] Assert deterministic BUDGET_EXCEEDED halts on runaway paths.'
-                    break
-                case '[05] RUN BATCH QUERY AGGREGATOR':
-                    tooltip =
-                        '>> [TOOLTIP] Aggregate heterogeneous queries with fault isolation and RFC 8785 audit hash.'
-                    break
-                case '[ROOT MENU]':
-                    tooltip =
-                        '>> [TOOLTIP] Exit spatial cockpit back to root runner.'
-                    break
-            }
-            await lib.hunt(WRITE_CONSOLE, { idx: 'cns00', src: tooltip })
-        },
     })
 
     const selected = choiceBit?.chcBit?.src
