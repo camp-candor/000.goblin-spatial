@@ -41,6 +41,13 @@ export class RunBatchQueryAggregator implements Action<MenuBit> {
     constructor(public bale?: MenuBit) {}
 }
 
+export const EXPORT_SIGNED_SPATIAL_RECEIPT =
+    '[Menu action] Export Signed Spatial Receipt'
+export class ExportSignedSpatialReceipt implements Action<MenuBit> {
+    readonly type = EXPORT_SIGNED_SPATIAL_RECEIPT
+    constructor(public bale?: MenuBit) {}
+}
+
 export type Actions =
     | InitMenu
     | UpdateMenu
@@ -48,3 +55,4 @@ export type Actions =
     | RunOracleReciprocityAudit
     | TestWorkBudgetTripwires
     | RunBatchQueryAggregator
+    | ExportSignedSpatialReceipt

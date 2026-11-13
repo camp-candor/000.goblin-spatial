@@ -36,6 +36,13 @@ export function reducer(
                 state,
             )
 
+        case Act.EXPORT_SIGNED_SPATIAL_RECEIPT:
+            return Buzz.exportSignedSpatialReceiptMenuBuzz(
+                clone(model),
+                act.bale,
+                state,
+            )
+
         default:
             return model
     }

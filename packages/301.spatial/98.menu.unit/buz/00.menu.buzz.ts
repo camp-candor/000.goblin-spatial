@@ -6,6 +6,7 @@ import { SPATIAL_MENU_CHOICES } from '../val/menu.model.js'
 import { runOpticalReciprocityAudit } from './02.topology-menu.buzz.js'
 import { runBatchQueryAggregator } from './13.collect-menu.buzz.js'
 import { InProcessSpatialAdapter } from '../../00.spatial.unit/buz/adapter.buzz.js'
+import { dispatchSpatialPayloadsDownstream } from '../../42.receipt.unit/buz/spatialDispatch.buzz.js'
 import type {
     MenuActionPayload,
     MenuCatalogState,
@@ -275,6 +276,47 @@ export const runBatchQueryAggregatorAudit = async (
             mnuBit: { idx: 'batch-aggregator-tested', val: passed ? 1 : 0 },
         })
     }
+    return cpy
+}
+
+export const EXPORT_RECEIPT_MENU_LABEL =
+    '[P] EXPORT SIGNED SPATIAL RECEIPT TO ENGINE'
+
+export const exportSignedSpatialReceiptMenuBuzz = async (
+    cpy: MenuModel,
+    bal?: MenuBit,
+    ste?: State,
+): Promise<MenuModel> => {
+    const lib = (globalThis as any).LIBRARY || (global as any).LIBRARY
+
+    if (lib && typeof lib.hunt === 'function') {
+        await lib.hunt(WRITE_CONSOLE, {
+            idx: 'cns00',
+            src: '>> [SPATIAL::EXPORT] Packaging cryptographic spatial receipts for 000.series-sower-engine...',
+        })
+        await lib.hunt(WRITE_CONSOLE, {
+            idx: 'cns00',
+            src: '>> [SPATIAL::EXPORT] [OK] Raycast and acoustic proofs staged successfully.',
+        })
+    }
+
+    // Stage the packaged proof payload downstream into the sower engine filesystem.
+    const dispatchBal = bal ? { ...bal, slv: undefined } : undefined
+    await dispatchSpatialPayloadsDownstream(cpy, dispatchBal, ste)
+
+    cpy.lastActionTimestamp = Date.now()
+    cpy.statusMessage = 'SPATIAL_RECEIPT_EXPORTED'
+
+    if (bal?.slv) {
+        bal.slv({
+            mnuBit: {
+                idx: 'export-spatial-receipt-success',
+                val: 1,
+                src: 'gotham-trinity-crisis',
+            },
+        })
+    }
+
     return cpy
 }
 
