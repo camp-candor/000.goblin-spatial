@@ -5,6 +5,9 @@ export interface MenuPayload {
     readonly choice?: string
     readonly message?: string
     readonly error?: string
+    readonly opticalProof?: any
+    readonly acousticProof?: any
+    readonly [key: string]: any
 }
 
 export default interface MenuBit<TDat = MenuPayload> {

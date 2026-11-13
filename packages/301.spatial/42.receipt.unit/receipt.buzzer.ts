@@ -1,7 +1,7 @@
 export {
-  deepFreezeReceipt,
-  initReceipt,
-  mintPathReceipt,
-  mintPerceptReceipt,
-  mintDisplacementReceipt,
-} from './buz/receipt.buzz.js';
+    deepFreezeReceipt,
+    initReceipt,
+    mintPathReceipt,
+    mintPerceptReceipt,
+    mintDisplacementReceipt,
+} from './buz/receipt.buzz.js'

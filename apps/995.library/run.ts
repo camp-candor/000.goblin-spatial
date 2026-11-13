@@ -6,14 +6,136 @@ import { promisify } from 'util'
 import path from 'path'
 import fs from 'fs'
 import { createRequire } from 'module'
+import { fileURLToPath } from 'url'
 
 const require = createRequire(import.meta.url)
 const exec = promisify(execCb)
 
 // 1. Setup CLI
+const isDirectExecution = () => {
+    if (!process.argv[1]) return false
+    const entry = path.resolve(process.argv[1]).toLowerCase()
+    const current = path.resolve(fileURLToPath(import.meta.url)).toLowerCase()
+    return entry === current || entry.endsWith('run.ts')
+}
+
 program.option('--first').option('-t, --separator <char>')
-program.parse(process.argv)
+if (isDirectExecution()) {
+    program.parse(process.argv)
+}
 const options = program.opts()
+
+export interface IngestedSpatialTopologySummary {
+    readonly seriesSlug: string
+    readonly filePath: string
+    readonly merkleRoot: string
+    readonly nodeCount: number
+    readonly rawManifest: Record<string, any>
+}
+
+export interface SpatialIngestionToggleOptions {
+    readonly repoRoot?: string
+    readonly enabled?: boolean
+    readonly onTelemetry?: (line: string) => Promise<void> | void
+}
+
+/**
+ * [Task 1.3.2] Configure Spatial Ingestion Toggles:
+ * Parses newly transferred static topology graphs in manifests/*-topology.json upon terminal boot.
+ */
+export const ingestTransferredTopologyGraphs = async (
+    opts: SpatialIngestionToggleOptions = {},
+): Promise<IngestedSpatialTopologySummary[]> => {
+    const enabled =
+        opts.enabled ?? process.env.SPATIAL_INGEST_TOPOLOGY !== '0'
+    if (!enabled) {
+        if (opts.onTelemetry) {
+            await opts.onTelemetry(
+                '>> [SPATIAL:INGEST] Static topology ingestion toggle is DISABLED.',
+            )
+        }
+        return []
+    }
+
+    const repoRoot =
+        opts.repoRoot || path.resolve(import.meta.dirname, '../..')
+    const manifestsDir = path.join(repoRoot, 'manifests')
+
+    ;(globalThis as any).INGESTED_TOPOLOGY_MANIFESTS =
+        (globalThis as any).INGESTED_TOPOLOGY_MANIFESTS || {}
+
+    if (!fs.existsSync(manifestsDir)) {
+        if (opts.onTelemetry) {
+            await opts.onTelemetry(
+                '>> [SPATIAL:INGEST] No manifests/ directory present; awaiting fleet topology drop.',
+            )
+        }
+        return []
+    }
+
+    const files = fs
+        .readdirSync(manifestsDir)
+        .filter((f) => f.endsWith('.json'))
+        .sort((a, b) => a.localeCompare(b))
+
+    const ingested: IngestedSpatialTopologySummary[] = []
+
+    for (const file of files) {
+        const filePath = path.join(manifestsDir, file)
+        try {
+            const rawText = fs.readFileSync(filePath, 'utf8')
+            const parsed = JSON.parse(rawText)
+            const seriesSlug =
+                parsed.series_slug ||
+                parsed.topologyId ||
+                file.replace(/-topology\.json$/, '').replace(/\.json$/, '')
+            const merkleRoot = String(
+                parsed.merkle_root ||
+                    parsed.merkleRootHex ||
+                    parsed._meta?.state_hash ||
+                    '0'.repeat(64),
+            )
+            const nodesObj =
+                parsed.nodes || parsed.entities?.locations || {}
+            const nodeCount = Array.isArray(parsed.cells)
+                ? parsed.cells.length
+                : Object.keys(nodesObj).length
+
+            const summary: IngestedSpatialTopologySummary = Object.freeze({
+                seriesSlug,
+                filePath,
+                merkleRoot,
+                nodeCount,
+                rawManifest: parsed,
+            })
+
+            ;(globalThis as any).INGESTED_TOPOLOGY_MANIFESTS[seriesSlug] =
+                parsed
+            if (
+                !(globalThis as any).ACTIVE_TOPOLOGY_MANIFEST ||
+                seriesSlug === 'gotham-trinity-crisis'
+            ) {
+                ;(globalThis as any).ACTIVE_TOPOLOGY_MANIFEST = parsed
+            }
+
+            ingested.push(summary)
+
+            if (opts.onTelemetry) {
+                await opts.onTelemetry(
+                    `>> [SPATIAL:INGEST] [OK] Parsed static topology '${seriesSlug}' (${nodeCount} node(s) | Merkle: ${merkleRoot.slice(0, 12)}...)`,
+                )
+            }
+        } catch (err: any) {
+            if (opts.onTelemetry) {
+                await opts.onTelemetry(
+                    `:: [SPATIAL:INGEST_ERR] Malformed topology manifest ${file}: ${err?.message || String(err)}`,
+                )
+            }
+        }
+    }
+
+    return ingested
+}
 
 export interface PackageTerminalMetadata {
     name: string
@@ -175,6 +297,16 @@ const init = async () => {
             src: '>> [OK] Master Bus Initialized',
         })
 
+        // [Task 1.3.2] Parse newly transferred static topology graphs upon terminal boot
+        await ingestTransferredTopologyGraphs({
+            onTelemetry: async (line: string) => {
+                await LIBRARY.hunt(CONSOLE_ACTION_LIBRARY.UPDATE_CONSOLE, {
+                    idx: 'cns00',
+                    src: line,
+                })
+            },
+        })
+
         // 3. Dynamic Package Injection & Bus Wiring
         const packagesDist = path.resolve(
             import.meta.dirname,
@@ -254,6 +386,29 @@ const init = async () => {
                         })
                     },
                 })
+
+                if (
+                    pkg.name === '301.spatial' &&
+                    MENU_ACTION.EXPORT_SIGNED_SPATIAL_RECEIPT
+                ) {
+                    await LIBRARY.hunt(MENU_ACTION_LIBRARY.ROUTE_MENU, {
+                        idx: '[P] EXPORT SIGNED SPATIAL RECEIPT TO ENGINE',
+                        src: 'Package raycast and acoustic proofs and stage signed receipt into 000.series-sower-engine.',
+                        fnc: async () => {
+                            await new Promise<void>((resolve) => {
+                                ;(global as any)[pkg.globalKey].hunt(
+                                    MENU_ACTION.EXPORT_SIGNED_SPATIAL_RECEIPT,
+                                    {
+                                        slv: resolve,
+                                    },
+                                )
+                            })
+                            await LIBRARY.hunt(MENU_ACTION_LIBRARY.OPEN_MENU, {
+                                src: '',
+                            })
+                        },
+                    })
+                }
 
                 await LIBRARY.hunt(CONSOLE_ACTION_LIBRARY.UPDATE_CONSOLE, {
                     idx: 'cns00',
@@ -391,4 +546,6 @@ const main = async () => {
     }
 }
 
-main()
+if (isDirectExecution()) {
+    main()
+}
