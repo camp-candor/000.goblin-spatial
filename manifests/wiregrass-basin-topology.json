@@ -1,0 +1,30 @@
+{
+    "schema_version": "1.0.0",
+    "series_slug": "wiregrass-basin",
+    "merkle_root": "dbbd52f74f58f28f976fe453650fe8be820c4ca3c91406c88729fda119ba1760",
+    "nodes": {
+        "loc_dixie_starlight_diner": {
+            "locationId": "loc_dixie_starlight_diner",
+            "displayName": "Dixie-Starlight Diner Booth Seven",
+            "adjacentLocations": ["loc_dixie_starlight_lot"],
+            "acousticDampingFactor": 1400,
+            "lightingLevel": "INCANDESCENT",
+            "volumeCapacity": {
+                "maxAdultGoblins": 8,
+                "isCramped": false
+            }
+        },
+        "loc_dixie_starlight_lot": {
+            "locationId": "loc_dixie_starlight_lot",
+            "displayName": "Dixie-Starlight Truck Stop Asphalt Lot",
+            "adjacentLocations": ["loc_dixie_starlight_diner"],
+            "acousticDampingFactor": 800,
+            "lightingLevel": "INCANDESCENT",
+            "volumeCapacity": {
+                "maxAdultGoblins": 12,
+                "isCramped": false
+            }
+        }
+    },
+    "timestamp": "2026-11-13T20:38:03.897Z"
+}
