@@ -61,6 +61,12 @@ export class RunEventBlockingProbe implements Action<MenuBit> {
     constructor(public bale?: MenuBit) {}
 }
 
+export const PROBE_CHRONO_AGENDA = '[Menu action] Probe Chrono Agenda'
+export class ProbeChronoAgenda implements Action<MenuBit> {
+    readonly type = PROBE_CHRONO_AGENDA
+    constructor(public bale?: MenuBit) {}
+}
+
 export type Actions =
     | InitMenu
     | UpdateMenu
@@ -71,3 +77,4 @@ export type Actions =
     | RunDiurnalSensoryProbe
     | ExportSignedSpatialReceipt
     | RunEventBlockingProbe
+    | ProbeChronoAgenda

@@ -4,8 +4,11 @@ import type State from '../../99.core/state.js'
 import type {
     DiurnalAttenuationProfile,
     DiurnalDaypart,
+    ScheduledSpatialAppointment,
+    AppointmentDiurnalWindow,
     SpatialClockSnapshot,
 } from '../fce/clock.interface.js'
+import { ScheduledSpatialAppointmentSchema } from '../fce/clock.interface.js'
 
 export const DIURNAL_PROFILE_TABLE: Readonly<
     Record<DiurnalDaypart, DiurnalAttenuationProfile>
@@ -207,6 +210,86 @@ export function parseSpatialClockSnapshot(
         tickSeconds,
         diurnalProfile,
     })
+}
+
+export function evaluateAppointmentDiurnalWindow(
+    appointment: ScheduledSpatialAppointment,
+): AppointmentDiurnalWindow {
+    const parsed = ScheduledSpatialAppointmentSchema.safeParse(appointment)
+    if (!parsed.success) {
+        const issues = parsed.error.issues
+        const hasDateIssue = issues.some((i) =>
+            String((i.path ?? []).join('.')).includes('isoDate'),
+        )
+        const hasTimeIssue = issues.some((i) =>
+            String((i.path ?? []).join('.')).includes('startTimeHm'),
+        )
+        if (hasTimeIssue) {
+            throw new Error(
+                'INVALID_SPATIAL_TIME: scheduled appointment time rejected',
+            )
+        }
+        if (hasDateIssue) {
+            throw new Error(
+                'INVALID_SPATIAL_DATE: scheduled appointment date rejected',
+            )
+        }
+        throw new Error(
+            'INVALID_SPATIAL_APPOINTMENT: scheduled appointment rejected',
+        )
+    }
+    const valid = parsed.data
+    const snapshot = parseSpatialClockSnapshot({
+        startDate: valid.isoDate,
+        startTime: valid.startTimeHm,
+    })
+    const window: AppointmentDiurnalWindow = {
+        beatId: valid.beatId,
+        title: valid.title,
+        isoDate: valid.isoDate,
+        startTimeHm: valid.startTimeHm,
+        beatCategory: valid.beatCategory,
+        ...(valid.locationId !== undefined
+            ? { locationId: valid.locationId }
+            : {}),
+        daypart: snapshot.daypart,
+        diurnalProfile: {
+            daypart: snapshot.diurnalProfile.daypart,
+            ambientLuminanceBps: snapshot.diurnalProfile.ambientLuminanceBps,
+            opticalRangeScaleBps: snapshot.diurnalProfile.opticalRangeScaleBps,
+            diurnalNoiseDeltaCdb: snapshot.diurnalProfile.diurnalNoiseDeltaCdb,
+        },
+        reserveCooldownTicks: valid.reserveCooldownTicks,
+    }
+    return Object.freeze({
+        ...window,
+        diurnalProfile: Object.freeze({ ...window.diurnalProfile }),
+    }) as AppointmentDiurnalWindow
+}
+
+export function evaluateAgendaDiurnalSchedule(
+    appointments: readonly ScheduledSpatialAppointment[],
+): ScheduledSpatialAppointment[] {
+    const copy = [...(appointments ?? [])]
+    copy.sort((a, b) => {
+        if (a.isoDate !== b.isoDate) {
+            return a.isoDate < b.isoDate ? -1 : 1
+        }
+        if (a.startTimeHm !== b.startTimeHm) {
+            return a.startTimeHm < b.startTimeHm ? -1 : 1
+        }
+        if (a.beatId !== b.beatId) {
+            return a.beatId < b.beatId ? -1 : 1
+        }
+        return 0
+    })
+    return Object.freeze(copy) as unknown as ScheduledSpatialAppointment[]
+}
+
+export function sortScheduledAppointments(
+    appointments: readonly ScheduledSpatialAppointment[],
+): ScheduledSpatialAppointment[] {
+    return evaluateAgendaDiurnalSchedule(appointments)
 }
 
 function resolveInputFromBale(bal?: ClockBit): SpatialClockInput {

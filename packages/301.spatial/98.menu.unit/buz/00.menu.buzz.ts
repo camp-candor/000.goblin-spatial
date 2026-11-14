@@ -30,6 +30,9 @@ import {
     buildSpatialEventStageBrief,
     evaluateSpatialIncidentWitnesses,
 } from '../../23.incident.unit/buz/incident.buzz.js'
+import { evaluateAgendaDiurnalSchedule } from '../../05.clock.unit/buz/clock.buzz.js'
+import { stageScheduledAppointmentSpatialProof } from '../../40.witness.unit/buz/witness.buzz.js'
+import type { ScheduledSpatialAppointment } from '../../05.clock.unit/fce/clock.interface.js'
 
 const UPDATE_GRID = '[Grid action] Update Grid'
 const OPEN_CHOICE = '[Open action] Open Choice'
@@ -140,6 +143,10 @@ export const updateMenu = async (
                         tooltip =
                             '>> [TOOLTIP] Preview spatial event blocking plus Fountain slugline cues.'
                         break
+                    case '[08] PROBE SCHEDULED STORY APPOINTMENTS':
+                        tooltip =
+                            '>> [TOOLTIP] Preview scheduled story appointments plus diurnal venue proofs.'
+                        break
                     case '[P] EXPORT SIGNED SPATIAL RECEIPT TO ENGINE':
                         tooltip =
                             '>> [TOOLTIP] Package acoustic and optical raycast proofs and stage signed receipt into 000.series-sower-engine.'
@@ -217,6 +224,11 @@ export const updateMenu = async (
 
         case '[07] RUN SPATIAL EVENT WITNESS BLOCKING PROBE': {
             await ste.hunt(ActMnu.RUN_EVENT_BLOCKING_PROBE, {})
+            break
+        }
+
+        case '[08] PROBE SCHEDULED STORY APPOINTMENTS': {
+            await ste.hunt(ActMnu.PROBE_CHRONO_AGENDA, {})
             break
         }
 
@@ -736,6 +748,159 @@ export const exportSignedSpatialReceiptMenuBuzz = async (
         })
     }
 
+    return cpy
+}
+
+export const CHRONO_AGENDA_MENU_LABEL =
+    '[08] PROBE SCHEDULED STORY APPOINTMENTS'
+
+function toChronoAscii(value: string): string {
+    return String(value || '')
+        .replace(/[^\x20-\x7E]/g, '')
+        .trim()
+}
+
+function defaultChronoAppointments(): ScheduledSpatialAppointment[] {
+    return [
+        {
+            beatId: 'beat-dawn-001',
+            title: 'Dawn Muster',
+            isoDate: '2026-10-31',
+            startTimeHm: '05:45',
+            beatCategory: 'muster',
+            locationId: 'BRASS_WORKSHOP',
+            reserveCooldownTicks: 2,
+        },
+        {
+            beatId: 'beat-night-002',
+            title: 'Midnight Tribunal',
+            isoDate: '2026-10-31',
+            startTimeHm: '23:30',
+            beatCategory: 'tribunal',
+            locationId: 'BRASS_WORKSHOP',
+            reserveCooldownTicks: 4,
+        },
+    ]
+}
+
+function defaultChronoTopology(): Record<string, unknown> {
+    const active = (globalThis as Record<string, unknown>)
+        .ACTIVE_TOPOLOGY_MANIFEST as Record<string, unknown> | undefined
+    if (active !== undefined && active !== null) {
+        return active as Record<string, unknown>
+    }
+    return {
+        topologyId: 'BRASS_WORKSHOP',
+        nodes: { BRASS_WORKSHOP: { id: 'BRASS_WORKSHOP' } },
+    }
+}
+
+function defaultChronoActors(): Array<{
+    actorId: string
+    coord: AxialCoord
+}> {
+    return [
+        { actorId: 'ALICE', coord: createAxialCoord(0, 1) },
+        { actorId: 'BOB', coord: createAxialCoord(1, 0) },
+    ]
+}
+
+export const runChronoAgendaProbe = async (
+    cpy: MenuModel,
+    bal?: MenuBit,
+    ste?: State,
+): Promise<MenuModel> => {
+    const lib = (globalThis as unknown as { LIBRARY?: unknown }).LIBRARY as
+        { hunt?: unknown } | undefined
+    const dat = ((bal?.dat ?? {}) as Record<string, unknown>) ?? {}
+    const appointments = Array.isArray(dat.appointments)
+        ? (dat.appointments as ScheduledSpatialAppointment[])
+        : defaultChronoAppointments()
+    const topology =
+        (dat.topology as Record<string, unknown> | undefined) ??
+        defaultChronoTopology()
+    const actors = Array.isArray(dat.actors)
+        ? (dat.actors as Array<{ actorId: string; coord: AxialCoord }>)
+        : defaultChronoActors()
+    const lines: string[] = []
+    const proofs: unknown[] = []
+    let ordered: ScheduledSpatialAppointment[] = []
+    try {
+        ordered = evaluateAgendaDiurnalSchedule(appointments)
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        lines.push(
+            toChronoAscii(`:: [SPATIAL:AGENDA_ERR] invalid agenda ${msg}`),
+        )
+        ordered = []
+    }
+    for (const appointment of ordered) {
+        try {
+            const proof = stageScheduledAppointmentSpatialProof(
+                topology,
+                actors as never,
+                appointment,
+            )
+            proofs.push(proof)
+            const witnessCount = proof.witnessReport.visibleWitnessIds.length
+            lines.push(
+                toChronoAscii(
+                    `>> [SPATIAL:AGENDA] ${proof.isoDate} ${proof.startTimeHm} (${proof.daypart}) | LUM ${proof.witnessReport.diurnalProfile.ambientLuminanceBps} | LOC ${proof.locationId} | WITNESSES ${witnessCount}`,
+                ),
+            )
+        } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            lines.push(toChronoAscii(`:: [SPATIAL:AGENDA_ERR] ${msg}`))
+        }
+    }
+    if (lines.length === 0) {
+        lines.push(toChronoAscii('>> [SPATIAL:AGENDA] no appointments sealed'))
+    }
+    const writeLine = async (line: string): Promise<void> => {
+        if (
+            lib !== undefined &&
+            lib !== null &&
+            typeof lib.hunt === 'function'
+        ) {
+            try {
+                await (lib.hunt as (a: string, b: unknown) => Promise<unknown>)(
+                    WRITE_CONSOLE,
+                    { idx: 'cns00', src: line },
+                )
+            } catch {
+                // headless fallback keeps resolving
+            }
+        }
+    }
+    for (const line of lines) {
+        await writeLine(line)
+    }
+    if (ste !== undefined && ste !== null) {
+        const hunt = (ste as unknown as { hunt?: unknown }).hunt
+        if (typeof hunt === 'function') {
+            for (const line of lines) {
+                try {
+                    await (
+                        hunt as (a: string, b: unknown) => Promise<unknown>
+                    ).call(ste, WRITE_CONSOLE, { idx: 'cns00', src: line })
+                } catch {
+                    break
+                }
+            }
+        }
+    }
+    cpy.activeMenuMode = 'CHRONO_AGENDA'
+    cpy.statusMessage = 'CHRONO_AGENDA_PROBE_COMPLETE'
+    cpy.lastAuditSummary = `chrono-agenda-probe: ${proofs.length} proofs staged`
+    if (bal?.slv) {
+        bal.slv({
+            mnuBit: {
+                idx: 'probe-chrono-agenda',
+                val: 1,
+                dat: { proofs },
+            },
+        })
+    }
     return cpy
 }
 

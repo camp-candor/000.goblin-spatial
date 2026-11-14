@@ -6,6 +6,7 @@ export type MenuMode =
     | 'TOPOLOGY_INSPECTION'
     | 'DIURNAL_AUDIT'
     | 'EVENT_BLOCKING'
+    | 'CHRONO_AGENDA'
 
 export interface MenuChoiceItem {
     readonly id: string

@@ -1,5 +1,10 @@
 import { AxialCoord, PackedAxial } from '../../28.axial.unit/val/axial.model.js'
 import WitnessBit from './witness.bit.js'
+import type {
+    SpatialIncidentReport,
+    SpatialEventStageBrief,
+} from '../../23.incident.unit/fce/incident.interface.js'
+import type { DiurnalDaypart } from '../../05.clock.unit/fce/clock.interface.js'
 
 export default interface Witness {
     //witnessBitList: WitnessBit[] = [];
@@ -32,4 +37,15 @@ export interface OpticalTransmissionReceipt {
     readonly isVisible: boolean
     readonly samples: readonly CellOpacitySample[]
     readonly severedAtCell?: PackedAxial
+}
+
+export interface ScheduledAppointmentSpatialProof {
+    readonly beatId: string
+    readonly title: string
+    readonly isoDate: string
+    readonly startTimeHm: string
+    readonly daypart: DiurnalDaypart
+    readonly locationId: string
+    readonly witnessReport: SpatialIncidentReport
+    readonly stageBrief: SpatialEventStageBrief
 }

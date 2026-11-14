@@ -16,6 +16,9 @@ import type {
 import { evaluateSpatialIncidentWitnesses } from '../../23.incident.unit/buz/incident.buzz.js'
 import { buildSpatialEventStageBrief } from '../../23.incident.unit/buz/incident.buzz.js'
 import { resetSpatialIncidentState } from '../../23.incident.unit/buz/incident.buzz.js'
+import { evaluateAgendaDiurnalSchedule } from '../../05.clock.unit/buz/clock.buzz.js'
+import type { ScheduledSpatialAppointment } from '../../05.clock.unit/fce/clock.interface.js'
+import { stageScheduledAppointmentSpatialProof } from '../../40.witness.unit/buz/witness.buzz.js'
 
 const UPDATE_CONSOLE = '[Console action] Update Console'
 
@@ -625,4 +628,140 @@ export function verifySpatialBatchReplayDeterminism(
         mismatchedPackets,
         packetCount: second.packetCount,
     }
+}
+
+export interface ScheduledAgendaSpatialProofSummary {
+    readonly proofCount: number
+    readonly proofBatchSha256: string
+    readonly proofFile: string
+    readonly outputDir: string
+}
+
+export function exportScheduledAgendaSpatialProofs(
+    topology: unknown,
+    actors: ReadonlyArray<{ actorId: string; coord: unknown }>,
+    appointments: readonly ScheduledSpatialAppointment[],
+    outputDir: string,
+    ste?: State,
+): ScheduledAgendaSpatialProofSummary {
+    assertSafeBatchDir(outputDir)
+    const sorted = evaluateAgendaDiurnalSchedule(appointments ?? [])
+    const proofs = sorted.map((appointment) => {
+        const staged = stageScheduledAppointmentSpatialProof(
+            topology,
+            actors as never,
+            appointment,
+        )
+        const proofSha256 = computeSha256Hex(
+            canonicalizeJson({
+                beatId: staged.beatId,
+                daypart: staged.daypart,
+                isoDate: staged.isoDate,
+                locationId: staged.locationId,
+                stageBrief: staged.stageBrief,
+                startTimeHm: staged.startTimeHm,
+                witnessReport: staged.witnessReport,
+            }),
+        )
+        return Object.freeze({
+            beatId: staged.beatId,
+            daypart: staged.daypart,
+            diurnalProfile:
+                staged.witnessReport.diurnalProfile !== undefined
+                    ? { ...staged.witnessReport.diurnalProfile }
+                    : undefined,
+            isoDate: staged.isoDate,
+            locationId: staged.locationId,
+            proofSha256,
+            stageBrief: staged.stageBrief,
+            startTimeHm: staged.startTimeHm,
+            title: staged.title,
+            witnessReport: staged.witnessReport,
+        })
+    })
+    const digests = proofs.map(
+        (p) => (p as { proofSha256: string }).proofSha256,
+    )
+    const proofBatchSha256 = computeSha256Hex(canonicalizeJson({ digests }))
+    const payload = {
+        proofBatchSha256,
+        proofCount: proofs.length,
+        proofs,
+    }
+    fs.mkdirSync(outputDir, { recursive: true })
+    const proofFile = path.join(outputDir, 'agenda-spatial-proofs.json')
+    const content = JSON.stringify(payload, null, 2).replace(/\r/g, '') + '\n'
+    fs.writeFileSync(proofFile, content, 'utf-8')
+    emitConsole(
+        ste,
+        `>> [SPATIAL:AGENDA_PROOF] count=${proofs.length} sha256=${proofBatchSha256.slice(0, 12)}`,
+    )
+    return Object.freeze({
+        outputDir,
+        proofBatchSha256,
+        proofCount: proofs.length,
+        proofFile,
+    })
+}
+
+export function verifySpatialAgendaReplayEquivalence(
+    topology: unknown,
+    actors: ReadonlyArray<{ actorId: string; coord: unknown }>,
+    appointments: readonly ScheduledSpatialAppointment[],
+    outputDir: string,
+    ste?: State,
+): {
+    deterministic: boolean
+    proofCount: number
+    proofBatchSha256: string
+    mismatches: number
+} {
+    assertSafeBatchDir(outputDir)
+    resetSpatialIncidentState()
+    const first = exportScheduledAgendaSpatialProofs(
+        topology,
+        actors,
+        appointments,
+        outputDir,
+        ste,
+    )
+    const proofFile = path.join(outputDir, 'agenda-spatial-proofs.json')
+    const bytesA = fs.existsSync(proofFile)
+        ? fs.readFileSync(proofFile, 'utf-8')
+        : ''
+    const digestA = first.proofBatchSha256
+    if (fs.existsSync(proofFile)) {
+        fs.rmSync(proofFile, { force: true })
+    }
+    resetSpatialIncidentState()
+    const second = exportScheduledAgendaSpatialProofs(
+        topology,
+        actors,
+        appointments,
+        outputDir,
+        ste,
+    )
+    const bytesB = fs.existsSync(proofFile)
+        ? fs.readFileSync(proofFile, 'utf-8')
+        : ''
+    const digestB = second.proofBatchSha256
+    const mismatches = bytesA === bytesB && digestA === digestB ? 0 : 1
+    const deterministic = mismatches === 0
+    if (deterministic) {
+        emitConsole(
+            ste,
+            `>> [SPATIAL:AGENDA_REPLAY] Beats=${second.proofCount} SHA256=${digestB.slice(0, 12)} Mismatches=0`,
+        )
+    } else {
+        emitConsole(
+            ste,
+            `>> [SPATIAL:AGENDA_REPLAY] Beats=${second.proofCount} SHA256=${digestB.slice(0, 12)} Mismatches=${mismatches}`,
+        )
+    }
+    return Object.freeze({
+        deterministic,
+        mismatches,
+        proofBatchSha256: digestB,
+        proofCount: second.proofCount,
+    })
 }

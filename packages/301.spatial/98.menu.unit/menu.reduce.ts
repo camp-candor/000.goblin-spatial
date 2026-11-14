@@ -69,6 +69,9 @@ export function reducer(
                 state,
             )
 
+        case Act.PROBE_CHRONO_AGENDA:
+            return Buzz.runChronoAgendaProbe(cloneModel(model), act.bale, state)
+
         default:
             return model
     }
