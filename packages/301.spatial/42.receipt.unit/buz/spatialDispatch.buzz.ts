@@ -395,15 +395,16 @@ export const dispatchSpatialPayloadsDownstream = async (
 }
 
 function pad4(value: number): string {
-    const s = String(Math.trunc(value))
-    while (s.length < 4) return '0'.repeat(4 - s.length) + s
-    return s
+    return String(Math.trunc(value)).padStart(4, '0')
 }
 
 function assertSafeBatchDir(outputDir: string): void {
     const raw = String(outputDir || '')
     if (raw.length === 0) {
         throw new Error('UNSAFE_SPATIAL_BATCH_DIR: empty output directory')
+    }
+    if (raw.includes('\0')) {
+        throw new Error('UNSAFE_SPATIAL_BATCH_DIR: null byte rejected')
     }
     const parts = raw.split(/[\\/]/)
     if (parts.includes('..')) {

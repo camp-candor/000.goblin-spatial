@@ -2,8 +2,8 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
     test: {
-        name: 'packages/301.spatial',
-        globals: true,
-        environment: 'node',
+        // Spatial microbenchmarks (raycast, batch, invoker) are sensitive to
+        // multi-worker CPU contention; run test files sequentially.
+        fileParallelism: false,
     },
 })

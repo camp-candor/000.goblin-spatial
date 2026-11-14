@@ -192,4 +192,51 @@ describe('Spatial Incident Witness Suite', () => {
         )
         expect(evtReduced.totalSpatialEvents).toBe(1)
     })
+
+    it('blocks occluded actor while keeping clear actor visible and scales down at 23:00', () => {
+        const afternoon = evaluateSpatialIncidentWitnesses({
+            locationId: 'BRASS_WORKSHOP',
+            originCoord: createAxialCoord(0, 0),
+            actors: [
+                { actorId: 'actor_behind_wall', coord: createAxialCoord(0, 3) },
+                { actorId: 'actor_clear', coord: createAxialCoord(1, 0) },
+            ],
+            opaqueCells: [createAxialCoord(0, 1), createAxialCoord(0, 2)],
+            startDate: '2026-10-31',
+            startTime: '14:00',
+        } as never)
+        const night = evaluateSpatialIncidentWitnesses({
+            locationId: 'BRASS_WORKSHOP',
+            originCoord: createAxialCoord(0, 0),
+            actors: [
+                { actorId: 'actor_clear', coord: createAxialCoord(1, 0) },
+                { actorId: 'actor_behind_wall', coord: createAxialCoord(0, 3) },
+            ],
+            opaqueCells: [createAxialCoord(0, 1), createAxialCoord(0, 2)],
+            startDate: '2026-10-31',
+            startTime: '23:00',
+        } as never)
+        const behind = afternoon.witnesses.find(
+            (w) => w.actorId === 'actor_behind_wall',
+        )
+        const clearDay = afternoon.witnesses.find(
+            (w) => w.actorId === 'actor_clear',
+        )
+        const clearNight = night.witnesses.find(
+            (w) => w.actorId === 'actor_clear',
+        )
+        expect(behind?.sawEvent).toBe(false)
+        expect(clearDay?.sawEvent).toBe(true)
+        expect(afternoon.witnesses.map((w) => w.actorId)).toEqual([
+            'actor_behind_wall',
+            'actor_clear',
+        ])
+        expect(night.witnesses.map((w) => w.actorId)).toEqual([
+            'actor_behind_wall',
+            'actor_clear',
+        ])
+        expect(clearNight!.effectiveTransmissionBps).toBeLessThan(
+            clearDay!.effectiveTransmissionBps,
+        )
+    })
 })

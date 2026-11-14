@@ -20,8 +20,11 @@ describe('Task 8.6 Terminal Query Receipt Verification Menu Action', () => {
     })
 
     it('executes REC01 action and verifies 100% cryptographic parity in cns00 telemetry', async () => {
-        const bus = createSpatialBus()
         const action = createReceiptVerificationAction()
+        // Warm up V8 JIT and crypto paths before timing the 2ms envelope
+        await action.execute(createSpatialBus())
+
+        const bus = createSpatialBus()
         const logs: string[] = []
 
         bus.subscribe('TELEMETRY_LOG', (evt) => {

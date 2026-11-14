@@ -150,4 +150,33 @@ describe('Spatial Stage Brief Suite', () => {
         })
         expect(JSON.stringify(first)).toBe(JSON.stringify(second))
     })
+
+    it('enforces EXT/INT sluglines, 23:15 night shift, and safeParse strict rejection', () => {
+        const dayBrief = buildSpatialEventStageBrief(makeReport('14:00'), {
+            locationId: 'COURTYARD',
+            locationName: 'Courtyard',
+            isExterior: true,
+        })
+        expect(dayBrief.sluglineToken.startsWith('EXT.')).toBe(true)
+        expect(dayBrief.sluglineToken).toContain('AFTERNOON')
+        expect(dayBrief.sluglineToken).toContain('14:00')
+
+        const nightBrief = buildSpatialEventStageBrief(makeReport('23:15'), {
+            locationId: 'BRASS_WORKSHOP',
+            locationName: 'Brass Workshop',
+            isExterior: false,
+        })
+        expect(nightBrief.sluglineToken.startsWith('INT.')).toBe(true)
+        expect(nightBrief.sluglineToken).toContain('NIGHT')
+        expect(nightBrief.sluglineToken).toContain('23:15')
+        expect(nightBrief.lightingActionLine).not.toBe(
+            dayBrief.lightingActionLine,
+        )
+
+        const neg = SpatialEventStageBriefSchema.safeParse({
+            ...nightBrief,
+            unexpectedKey: 'reject-me',
+        })
+        expect(neg.success).toBe(false)
+    })
 })

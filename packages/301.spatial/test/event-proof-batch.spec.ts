@@ -136,4 +136,37 @@ describe('Spatial Event Proof Batch Suite', () => {
         )
         expect((resolved as { rcpBit: { val: number } }).rcpBit.val).toBe(1)
     })
+
+    it('sorts shuffled 3,1,2 sequences in index, validates packet fields, and rejects ../escape', () => {
+        const out = tmpDir()
+        const summary = exportSpatialEventProofBatch(
+            [makeEvent(3, 30), makeEvent(1, 10), makeEvent(2, 20)],
+            { outputDir: out },
+        )
+        const indexRaw = fs.readFileSync(
+            path.join(out, 'spatial_event_index.json'),
+            'utf-8',
+        )
+        const indexJson = JSON.parse(indexRaw) as { packetFiles: string[] }
+        expect(indexJson.packetFiles).toEqual([
+            'spatial_event_0001_t0010.json',
+            'spatial_event_0002_t0020.json',
+            'spatial_event_0003_t0030.json',
+        ])
+        expect(summary.packetFiles).toEqual(indexJson.packetFiles)
+        for (const f of indexJson.packetFiles) {
+            const packet = JSON.parse(
+                fs.readFileSync(path.join(out, f), 'utf-8'),
+            ) as Record<string, unknown>
+            expect(packet.chronology).toBeDefined()
+            expect(packet.incidentReport).toBeDefined()
+            expect(packet.stageBrief).toBeDefined()
+            expect(packet.packetSha256).toMatch(/^[a-f0-9]{64}$/)
+        }
+        expect(() =>
+            exportSpatialEventProofBatch([makeEvent(1, 1)], {
+                outputDir: '../escape',
+            }),
+        ).toThrow('UNSAFE_SPATIAL_BATCH_DIR')
+    })
 })
