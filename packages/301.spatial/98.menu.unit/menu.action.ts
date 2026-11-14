@@ -41,10 +41,23 @@ export class RunBatchQueryAggregator implements Action<MenuBit> {
     constructor(public bale?: MenuBit) {}
 }
 
+export const RUN_DIURNAL_SENSORY_PROBE =
+    '[Menu action] Run Diurnal Sensory Probe'
+export class RunDiurnalSensoryProbe implements Action<MenuBit> {
+    readonly type = RUN_DIURNAL_SENSORY_PROBE
+    constructor(public bale?: MenuBit) {}
+}
+
 export const EXPORT_SIGNED_SPATIAL_RECEIPT =
     '[Menu action] Export Signed Spatial Receipt'
 export class ExportSignedSpatialReceipt implements Action<MenuBit> {
     readonly type = EXPORT_SIGNED_SPATIAL_RECEIPT
+    constructor(public bale?: MenuBit) {}
+}
+
+export const RUN_EVENT_BLOCKING_PROBE = '[Menu action] Run Event Blocking Probe'
+export class RunEventBlockingProbe implements Action<MenuBit> {
+    readonly type = RUN_EVENT_BLOCKING_PROBE
     constructor(public bale?: MenuBit) {}
 }
 
@@ -55,4 +68,6 @@ export type Actions =
     | RunOracleReciprocityAudit
     | TestWorkBudgetTripwires
     | RunBatchQueryAggregator
+    | RunDiurnalSensoryProbe
     | ExportSignedSpatialReceipt
+    | RunEventBlockingProbe

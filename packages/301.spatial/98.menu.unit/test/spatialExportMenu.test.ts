@@ -138,4 +138,76 @@ describe('98.menu.unit - Spatial Export Menu Trigger & Topology Ingestion [Task 
             ),
         ).toBe(true)
     })
+
+    it('preserves MenuModel immutability when dispatching ExportSignedSpatialReceipt through reducer', async () => {
+        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spatial-immutable-'))
+        const initialModel = new MenuModel()
+        initialModel.statusMessage = 'SPATIAL_ORACLE_READY'
+        initialModel.lastActionTimestamp = 0
+
+        const clonedResult = await reducer(
+            initialModel,
+            new Act.ExportSignedSpatialReceipt({
+                idx: 'trap-immutable',
+                dat: { targetEngineRoot: tempDir },
+            }),
+        )
+
+        expect(initialModel.statusMessage).toBe('SPATIAL_ORACLE_READY')
+        expect(initialModel.lastActionTimestamp).toBe(0)
+        expect(clonedResult.statusMessage).toBe('SPATIAL_RECEIPT_EXPORTED')
+        expect(clonedResult.lastActionTimestamp).toBeGreaterThan(0)
+    })
+
+    it('emits pure 7-bit ASCII WRITE_CONSOLE telemetry with >> [SPATIAL::EXPORT] and [OK]', async () => {
+        tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'spatial-ascii-'))
+        const capturedConsole: string[] = []
+        const prevLib = (globalThis as any).LIBRARY
+        ;(globalThis as any).LIBRARY = {
+            hunt: async (action: string, payload: any) => {
+                if (
+                    action === '[Write action] Write Console' ||
+                    action === '[Console action] Update Console'
+                ) {
+                    capturedConsole.push(String(payload?.src ?? ''))
+                }
+                return {}
+            },
+        }
+
+        try {
+            const model = new MenuModel()
+            await exportSignedSpatialReceiptMenuBuzz(model, {
+                idx: 'ascii-trap',
+                dat: { targetEngineRoot: tempDir },
+            })
+
+            expect(capturedConsole.length).toBeGreaterThanOrEqual(2)
+            for (const msg of capturedConsole) {
+                for (let i = 0; i < msg.length; i++) {
+                    expect(msg.charCodeAt(i)).toBeLessThanOrEqual(127)
+                }
+            }
+            expect(
+                capturedConsole.some(
+                    (m) =>
+                        m.includes('>> [SPATIAL::EXPORT]') &&
+                        m.includes('Packaging cryptographic spatial receipts'),
+                ),
+            ).toBe(true)
+            expect(
+                capturedConsole.some(
+                    (m) =>
+                        m.includes('>> [SPATIAL::EXPORT]') &&
+                        m.includes('[OK]'),
+                ),
+            ).toBe(true)
+        } finally {
+            if (prevLib === undefined) {
+                delete (globalThis as any).LIBRARY
+            } else {
+                ;(globalThis as any).LIBRARY = prevLib
+            }
+        }
+    })
 })

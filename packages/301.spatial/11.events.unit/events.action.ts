@@ -1,7 +1,5 @@
-import { Action } from '../99.core/interface/action.interface'
-import EventsBit from './fce/events.bit'
-
-// Events actions
+import type { Action } from '../99.core/interface/action.interface.js'
+import EventsBit from './fce/events.bit.js'
 
 export const INIT_EVENTS = '[Events action] Init Events'
 export class InitEvents implements Action {
@@ -15,4 +13,10 @@ export class UpdateEvents implements Action {
     constructor(public bale: EventsBit) {}
 }
 
-export type Actions = InitEvents | UpdateEvents
+export const RECORD_SPATIAL_EVENT = '[Events action] Record Spatial Event'
+export class RecordSpatialEvent implements Action {
+    readonly type = RECORD_SPATIAL_EVENT
+    constructor(public bale: EventsBit) {}
+}
+
+export type Actions = InitEvents | UpdateEvents | RecordSpatialEvent

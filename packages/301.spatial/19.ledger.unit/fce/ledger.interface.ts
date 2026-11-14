@@ -8,6 +8,12 @@ export interface SpatialAuditQuadruple {
     readonly receiptHash: string
 }
 
+export interface SpatialLedgerChronology {
+    readonly start_date: string
+    readonly start_time_hm: string
+    readonly daypart: string
+}
+
 export interface SpatialLedgerEntry {
     readonly sequenceNumber: number
     readonly tickNumber: number
@@ -18,6 +24,7 @@ export interface SpatialLedgerEntry {
     readonly prevEventHash: string
     readonly chainedEventHash: string
     readonly recordedAtMs: number
+    readonly chronology?: SpatialLedgerChronology
 }
 
 export interface LineageVerificationResult {

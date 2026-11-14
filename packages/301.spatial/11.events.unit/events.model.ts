@@ -1,8 +1,6 @@
-import Events from './fce/events.interface'
-import EventsBit from './fce/events.interface'
+import Events from './fce/events.interface.js'
 
 export class EventsModel implements Events {
-    //idx:string;
-    //eventsBitList: EventsBit[] = [];
-    //eventsBits: any = {};
+    spatialEventReceipts: unknown[] = []
+    totalSpatialEvents: number = 0
 }

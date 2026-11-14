@@ -25,11 +25,14 @@ function warmSynchronousIsolate(port: SpatialPort): void {
     }
     isolateWarmed = true
     try {
-        port.invokeSynchronous({
+        const res = port.invokeSynchronous({
             queryType: 'RAYCAST',
-            origin: { q: 0, r: 0 },
-            target: { q: 1, r: 0 },
+            origin: { q: 0, r: 0, s: 0 },
+            target: { q: 1, r: 0, s: -1 },
         })
+        if (res.ok && res.result) {
+            computeSha256Hex(canonicalizeJson(res.result))
+        }
     } catch {
         // Warmup is best-effort; real errors surface on measured executes.
     }
@@ -79,8 +82,10 @@ export function createReceiptVerificationAction(
             const quad = receipt.auditQuadruple
 
             // 1. Recalculate RFC 8785 Canonical JCS SHA-256 Hashes
+            const { auditQuadruple: _aq, ...perceptWithoutQuad } =
+                percept as any
             const computedQueryJcs = canonicalizeJson(rawQuery)
-            const computedReceiptJcs = canonicalizeJson(percept)
+            const computedReceiptJcs = canonicalizeJson(perceptWithoutQuad)
             const computedQueryHash = computeSha256Hex(computedQueryJcs)
             const computedReceiptHash = computeSha256Hex(computedReceiptJcs)
 

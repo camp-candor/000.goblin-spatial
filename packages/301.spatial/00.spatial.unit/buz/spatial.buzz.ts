@@ -22,6 +22,16 @@ import { packAxialCell } from '../../38.types.unit/fce/manifest.schema.js'
 import { createInProcessSpatialPort } from './adapter.buzz.js'
 export { createInProcessSpatialPort }
 export type { PureSpatialKernel, SpatialPort }
+export {
+    buildSpatialEventStageBrief,
+    evaluateSpatialIncidentWitnesses,
+    resetSpatialIncidentState,
+} from '../../23.incident.unit/buz/incident.buzz.js'
+export { SpatialEventStageBriefSchema } from '../../23.incident.unit/fce/incident.interface.js'
+export type {
+    SpatialEventStageBrief,
+    SpatialIncidentReport,
+} from '../../23.incident.unit/fce/incident.interface.js'
 
 /**
  * Pure stateless in-memory spatial kernel invoker.
@@ -78,11 +88,7 @@ export class SpatialKernelInvoker implements PureSpatialKernel {
         }
 
         const startPacked = packAxialCell(query.origin.q, query.origin.r)
-        const destPacked = packAxialCell(
-            query.destination.q,
-            query.destination.r,
-        )
-        const totalCostUnits = hexDist * 50
+        const totalCostUnits = hexDist * 100
 
         if (totalCostUnits > query.maxBudgetCostUnits) {
             return Object.freeze({
@@ -94,9 +100,35 @@ export class SpatialKernelInvoker implements PureSpatialKernel {
             })
         }
 
+        const pathCells: number[] = []
+        if (hexDist === 0) {
+            pathCells.push(startPacked)
+        } else {
+            for (let i = 0; i <= hexDist; i++) {
+                const t = i / hexDist
+                const fq =
+                    query.origin.q + (query.destination.q - query.origin.q) * t
+                const fr =
+                    query.origin.r + (query.destination.r - query.origin.r) * t
+                const fs = -fq - fr
+                let rq = Math.round(fq)
+                let rr = Math.round(fr)
+                const rs = Math.round(fs)
+                const qDiff = Math.abs(rq - fq)
+                const rDiff = Math.abs(rr - fr)
+                const sDiff = Math.abs(rs - fs)
+                if (qDiff > rDiff && qDiff > sDiff) {
+                    rq = -rr - rs
+                } else if (rDiff > sDiff) {
+                    rr = -rq - rs
+                }
+                pathCells.push(packAxialCell(rq, rr))
+            }
+        }
+
         return Object.freeze({
             ok: true,
-            path: Object.freeze([startPacked, destPacked]),
+            path: Object.freeze(pathCells),
             totalCostUnits,
             cellsExpanded,
         })

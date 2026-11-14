@@ -4,7 +4,6 @@ import {
     PackedAxial,
 } from '../../28.axial.unit/val/axial.model.js'
 export const initWitness = (cpy: WitnessModel, bal: WitnessBit, ste: State) => {
-    debugger
     return cpy
 }
 

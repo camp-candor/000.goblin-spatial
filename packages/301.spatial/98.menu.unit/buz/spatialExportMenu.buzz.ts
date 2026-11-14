@@ -1,5 +1,20 @@
 import type { MenuActionPayload, SpatialBus } from '../fce/menu.interface.js'
 import { dispatchSpatialPayloadsDownstream } from '../../42.receipt.unit/buz/spatialDispatch.buzz.js'
+import type { SpatialClockSnapshot } from '../../05.clock.unit/fce/clock.interface.js'
+
+function resolveExportClockSnapshot(ste?: any): SpatialClockSnapshot | null {
+    const fromState = ste?.value?.clock?.activeSnapshot
+    if (fromState !== undefined && fromState !== null) {
+        return fromState as SpatialClockSnapshot
+    }
+    const fromGlobal =
+        (globalThis as any).ACTIVE_SPATIAL_CLOCK_SNAPSHOT ??
+        (globalThis as any).ACTIVE_CLOCK_SNAPSHOT
+    if (fromGlobal !== undefined && fromGlobal !== null) {
+        return fromGlobal as SpatialClockSnapshot
+    }
+    return null
+}
 
 export const spatialExportMenuBuzz = async (
     cpy: any,
@@ -16,7 +31,40 @@ export const spatialExportMenuBuzz = async (
         })
     }
 
-    const dispatchBal = bal ? { ...bal, slv: bal?.slv } : bal
+    const explicitDat = ((bal as any)?.dat || {}) as Record<string, unknown>
+    const activeSnap = resolveExportClockSnapshot(ste)
+    const exportStartDate =
+        (explicitDat.startDate as string | undefined) ??
+        (explicitDat.start_date as string | undefined) ??
+        activeSnap?.startDate
+    const exportStartTime =
+        (explicitDat.startTime as string | undefined) ??
+        (explicitDat.start_time as string | undefined) ??
+        (explicitDat.start_time_hm as string | undefined) ??
+        (activeSnap !== null && activeSnap !== undefined
+            ? `${String(activeSnap.hour).padStart(2, '0')}:${String(activeSnap.minute).padStart(2, '0')}`
+            : undefined)
+    const exportTimezone =
+        (explicitDat.timezoneLabel as string | undefined) ??
+        (explicitDat.timezone_label as string | undefined) ??
+        activeSnap?.timezoneLabel
+
+    const dispatchBal = {
+        ...(bal ? bal : {}),
+        dat: {
+            ...explicitDat,
+            ...(exportStartDate !== undefined
+                ? { startDate: exportStartDate }
+                : {}),
+            ...(exportStartTime !== undefined
+                ? { startTime: exportStartTime }
+                : {}),
+            ...(exportTimezone !== undefined
+                ? { timezoneLabel: exportTimezone }
+                : {}),
+        },
+        slv: (bal as any)?.slv,
+    }
     await dispatchSpatialPayloadsDownstream(cpy, dispatchBal, ste)
 
     if (lib && typeof lib.hunt === 'function') {

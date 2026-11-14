@@ -2,15 +2,92 @@ import { ReceiptModel } from '../receipt.model.js'
 import type ReceiptBit from '../fce/receipt.bit.js'
 import type State from '../../99.core/state.js'
 import type {
+    DisplacementReceipt,
     PathReceipt,
     PerceptCandidate,
-    DisplacementReceipt,
+    SpatialChronologyStamp,
+    SpatialDaypart,
 } from '../fce/receipt.interface.js'
 import {
+    DisplacementReceiptSchema,
     PathReceiptSchema,
     PerceptCandidateSchema,
-    DisplacementReceiptSchema,
 } from '../val/receipt.model.js'
+
+const SPATIAL_DAYPARTS: readonly SpatialDaypart[] = Object.freeze([
+    'DAWN',
+    'MORNING',
+    'AFTERNOON',
+    'DUSK',
+    'NIGHT',
+])
+
+function isIntegerIn(value: unknown, min: number, max: number): boolean {
+    return (
+        typeof value === 'number' &&
+        Number.isInteger(value) &&
+        value >= min &&
+        value <= max
+    )
+}
+
+export function isValidChronologyStamp(
+    candidate: unknown,
+): candidate is SpatialChronologyStamp {
+    if (candidate === null || typeof candidate !== 'object') return false
+    const c = candidate as Record<string, unknown>
+    if (typeof c.start_date !== 'string') return false
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(c.start_date)) return false
+    if (typeof c.start_time_hm !== 'string') return false
+    if (!/^\d{2}:\d{2}$/.test(c.start_time_hm)) return false
+    if (typeof c.daypart !== 'string') return false
+    if ((SPATIAL_DAYPARTS as readonly string[]).includes(c.daypart) === false) {
+        return false
+    }
+    if (!isIntegerIn(c.ambient_luminance_bps, 0, 10000)) return false
+    if (!isIntegerIn(c.optical_range_scale_bps, 0, 10000)) return false
+    if (typeof c.diurnal_noise_delta_cdb !== 'number') return false
+    if (!Number.isInteger(c.diurnal_noise_delta_cdb)) return false
+    if (typeof c.timezone_label !== 'string') return false
+    if (c.timezone_label.length < 1) return false
+    return true
+}
+
+export function stampReceiptChronology<T extends object>(
+    receipt: T,
+    chronology?: SpatialChronologyStamp,
+): T & { chronology?: SpatialChronologyStamp } {
+    if (chronology === undefined) return { ...receipt }
+    return deepFreezeReceipt({
+        ...receipt,
+        chronology: deepFreezeReceipt({ ...chronology }),
+    })
+}
+
+function splitChronology<T>(candidate: unknown): {
+    rest: T
+    chronology?: SpatialChronologyStamp
+    chronologyError?: string
+} {
+    if (candidate === null || typeof candidate !== 'object') {
+        return { rest: candidate as T }
+    }
+    const { chronology, ...rest } = candidate as Record<string, unknown>
+    if (chronology === undefined) return { rest: rest as unknown as T }
+    if (!isValidChronologyStamp(chronology)) {
+        return {
+            rest: rest as unknown as T,
+            chronologyError:
+                '[CHRONOLOGY_SCHEMA_BREACH] chronology stamp violates integer daypart contract',
+        }
+    }
+    return {
+        rest: rest as unknown as T,
+        chronology: deepFreezeReceipt({
+            ...(chronology as object),
+        }) as SpatialChronologyStamp,
+    }
+}
 
 /**
  * Deep freezes an object recursively to guarantee plain data immutability.
@@ -48,8 +125,20 @@ export const mintPathReceipt = (
     bal?: ReceiptBit,
     ste?: State,
 ): ReceiptModel => {
-    const candidate = bal?.dat?.pathReceipt
-    const parsed = PathReceiptSchema.safeParse(candidate)
+    const split = splitChronology(bal?.dat?.pathReceipt)
+    if (split.chronologyError) {
+        if (bal?.slv) {
+            bal.slv({
+                rcpBit: {
+                    idx: 'mint-path-receipt-fail',
+                    val: 0,
+                    dat: { error: split.chronologyError },
+                },
+            })
+        }
+        return cpy
+    }
+    const parsed = PathReceiptSchema.safeParse(split.rest)
 
     if (!parsed.success) {
         if (bal?.slv) {
@@ -66,7 +155,9 @@ export const mintPathReceipt = (
         return cpy
     }
 
-    const sealedReceipt = deepFreezeReceipt(parsed.data as PathReceipt)
+    const sealedReceipt = deepFreezeReceipt(
+        stampReceiptChronology(parsed.data as PathReceipt, split.chronology),
+    )
     cpy.totalPathReceiptsMinted += 1
     cpy.lastMintedTimestamp = Date.now()
 
@@ -87,8 +178,20 @@ export const mintPerceptReceipt = (
     bal?: ReceiptBit,
     ste?: State,
 ): ReceiptModel => {
-    const candidate = bal?.dat?.perceptCandidate
-    const parsed = PerceptCandidateSchema.safeParse(candidate)
+    const split = splitChronology(bal?.dat?.perceptCandidate)
+    if (split.chronologyError) {
+        if (bal?.slv) {
+            bal.slv({
+                rcpBit: {
+                    idx: 'mint-percept-receipt-fail',
+                    val: 0,
+                    dat: { error: split.chronologyError },
+                },
+            })
+        }
+        return cpy
+    }
+    const parsed = PerceptCandidateSchema.safeParse(split.rest)
 
     if (!parsed.success) {
         if (bal?.slv) {
@@ -105,7 +208,12 @@ export const mintPerceptReceipt = (
         return cpy
     }
 
-    const sealedCandidate = deepFreezeReceipt(parsed.data as PerceptCandidate)
+    const sealedCandidate = deepFreezeReceipt(
+        stampReceiptChronology(
+            parsed.data as PerceptCandidate,
+            split.chronology,
+        ),
+    )
     cpy.totalPerceptReceiptsMinted += 1
     cpy.lastMintedTimestamp = Date.now()
 
@@ -126,8 +234,20 @@ export const mintDisplacementReceipt = (
     bal?: ReceiptBit,
     ste?: State,
 ): ReceiptModel => {
-    const candidate = bal?.dat?.displacementReceipt
-    const parsed = DisplacementReceiptSchema.safeParse(candidate)
+    const split = splitChronology(bal?.dat?.displacementReceipt)
+    if (split.chronologyError) {
+        if (bal?.slv) {
+            bal.slv({
+                rcpBit: {
+                    idx: 'mint-displacement-receipt-fail',
+                    val: 0,
+                    dat: { error: split.chronologyError },
+                },
+            })
+        }
+        return cpy
+    }
+    const parsed = DisplacementReceiptSchema.safeParse(split.rest)
 
     if (!parsed.success) {
         if (bal?.slv) {
@@ -145,7 +265,10 @@ export const mintDisplacementReceipt = (
     }
 
     const sealedDisplacement = deepFreezeReceipt(
-        parsed.data as DisplacementReceipt,
+        stampReceiptChronology(
+            parsed.data as DisplacementReceipt,
+            split.chronology,
+        ),
     )
     cpy.totalDisplacementReceiptsMinted += 1
     cpy.lastMintedTimestamp = Date.now()

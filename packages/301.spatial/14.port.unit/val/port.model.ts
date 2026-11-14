@@ -45,7 +45,23 @@ export const StrictRaycastQuerySchema = z
         target: AxialCoordSchema,
         mode: z
             .enum(['SUBTRACTIVE_LINEAR', 'MULTIPLICATIVE_BEER_LAMBERT'])
-            .default('SUBTRACTIVE_LINEAR'),
+            .optional(),
+        thresholdBps: z.number().int().min(0).max(10000).optional(),
+        calculationMode: z
+            .enum(['SUBTRACTIVE_LINEAR', 'MULTIPLICATIVE_BEER_LAMBERT'])
+            .optional(),
+    })
+    .strict()
+
+export const StrictAcousticWavefrontQuerySchema = z
+    .object({
+        queryType: z.literal('ACOUSTIC_WAVEFRONT'),
+        sourceCoord: AxialCoordSchema,
+        sourceIntensityCdb: z.number().int(),
+        ambientNoiseFloorCdb: z.number().int(),
+        hearingThresholdCdb: z.number().int().optional(),
+        snrMinCdb: z.number().int().optional(),
+        workEnvelopeLimit: z.number().int().positive().max(2048).optional(),
     })
     .strict()
 
@@ -132,6 +148,7 @@ export const SpatialQueryDiscriminatorSchema = z.discriminatedUnion('queryType',
         StrictRoutingQuerySchema,
         StrictReachabilityQuerySchema,
         StrictDisplacementQuerySchema,
+        StrictAcousticWavefrontQuerySchema,
     ],
 )
 

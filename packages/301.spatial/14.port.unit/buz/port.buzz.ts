@@ -159,6 +159,19 @@ export function sanitizeLooseQueryInput(
  * Epistemic Firewall: Recursively sanitizes query payloads by stripping narrative lore tags.
  * Rejects payloads if banned values represent prose contamination.
  */
+const REJECTED_SNAKE_CASE_NARRATIVE_TAGS = new Set<string>([
+    'character_id',
+    'actor_id',
+    'speaker_id',
+    'dialogue_text',
+    'camera_parenthetical',
+    'observable_parenthetical',
+    'grievance_id',
+    'somatic_condition',
+    'narrative_state',
+    'personality',
+])
+
 export function sanitizeSpatialQueryPayload(
     rawPayload: unknown,
 ): QueryStripValidationResult {
@@ -172,11 +185,14 @@ export function sanitizeSpatialQueryPayload(
     }
 
     const strippedKeys: string[] = []
+    const rejectedKeys: string[] = []
     const cloned = JSON.parse(JSON.stringify(rawPayload))
 
     function scrubNode(node: Record<string, any>): void {
         for (const key of Object.keys(node)) {
-            if (BANNED_NARRATIVE_TAGS.includes(key as any)) {
+            if (REJECTED_SNAKE_CASE_NARRATIVE_TAGS.has(key)) {
+                rejectedKeys.push(key)
+            } else if (BANNED_NARRATIVE_TAGS.includes(key as any)) {
                 delete node[key]
                 strippedKeys.push(key)
             } else if (typeof node[key] === 'object' && node[key] !== null) {
@@ -189,6 +205,14 @@ export function sanitizeSpatialQueryPayload(
     }
 
     scrubNode(cloned)
+
+    if (rejectedKeys.length > 0) {
+        return {
+            valid: false,
+            strippedKeys: Object.freeze(strippedKeys),
+            breachReason: `NARRATIVE_TAGS_FORBIDDEN: Ingress rejected due to epistemic firewall breach: [${rejectedKeys.join(', ')}]`,
+        }
+    }
 
     const parsed = SpatialQueryDiscriminatorSchema.safeParse(cloned)
     if (!parsed.success) {

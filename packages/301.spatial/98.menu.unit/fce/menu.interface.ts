@@ -1,6 +1,11 @@
 import type { Model } from '../../99.core/interface/model.interface.js'
 
-export type MenuMode = 'ROOT' | 'BOUNDARY_AUDIT' | 'TOPOLOGY_INSPECTION'
+export type MenuMode =
+    | 'ROOT'
+    | 'BOUNDARY_AUDIT'
+    | 'TOPOLOGY_INSPECTION'
+    | 'DIURNAL_AUDIT'
+    | 'EVENT_BLOCKING'
 
 export interface MenuChoiceItem {
     readonly id: string

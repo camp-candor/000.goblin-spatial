@@ -10,6 +10,7 @@ import { sanitizeSpatialQueryPayload } from '../../14.port.unit/buz/port.buzz.js
 import {
     canonicalizeJson,
     computeSha256Hex,
+    sealLedgerEntry,
 } from '../../19.ledger.unit/buz/ledger.buzz.js'
 import { deepFreezeReceipt } from '../../42.receipt.unit/buz/receipt.buzz.js'
 import { GENESIS_HASH_64 } from '../../19.ledger.unit/val/ledger.model.js'
@@ -18,6 +19,10 @@ import { packAxialCell } from '../../38.types.unit/fce/manifest.schema.js'
 export class InProcessSpatialAdapter implements SpatialPort {
     readonly kernelVersion: string
     private readonly kernel: PureSpatialKernel
+    private readonly ledgerHeads = new Map<
+        string,
+        { seq: number; prevEventHash: string }
+    >()
 
     constructor(kernel?: PureSpatialKernel) {
         this.kernel = kernel ?? new SpatialKernelInvoker()
@@ -140,6 +145,21 @@ export class InProcessSpatialAdapter implements SpatialPort {
                 }
                 break
             }
+
+            case 'ACOUSTIC_WAVEFRONT': {
+                ok = true
+                cellsExpanded = 1
+                const snrCdb =
+                    query.sourceIntensityCdb - query.ambientNoiseFloorCdb
+                payloadData = {
+                    sourceCoord: query.sourceCoord,
+                    sourceIntensityCdb: query.sourceIntensityCdb,
+                    ambientNoiseFloorCdb: query.ambientNoiseFloorCdb,
+                    snrCdb,
+                    isAudible: snrCdb >= (query.snrMinCdb ?? 0),
+                }
+                break
+            }
         }
 
         // 3. Calculate deterministic RFC 8785 hashes and quadruple
@@ -168,6 +188,32 @@ export class InProcessSpatialAdapter implements SpatialPort {
                 1000,
         )
 
+        let ledgerEntry:
+            (ReturnType<typeof sealLedgerEntry> & { seq: number }) | undefined
+        if (context?.recordLedger) {
+            const streamKey = context.streamId ?? 'default'
+            const head = this.ledgerHeads.get(streamKey) ?? {
+                seq: 0,
+                prevEventHash: GENESIS_HASH_64,
+            }
+            const nextSeq = head.seq + 1
+            const sealed = sealLedgerEntry({
+                sequenceNumber: nextSeq,
+                tickNumber: context.currentTick ?? context.tickNumber ?? 0,
+                queryType: query.queryType,
+                kernelVersion: this.kernelVersion,
+                streamId: streamKey,
+                recordedAtMs: Date.now(),
+                auditQuadruple,
+                prevEventHash: head.prevEventHash,
+            })
+            this.ledgerHeads.set(streamKey, {
+                seq: nextSeq,
+                prevEventHash: sealed.chainedEventHash,
+            })
+            ledgerEntry = Object.freeze({ ...sealed, seq: nextSeq })
+        }
+
         const receipt: SynchronousExecutionReceipt<T> = {
             ok,
             queryType: query.queryType,
@@ -179,6 +225,7 @@ export class InProcessSpatialAdapter implements SpatialPort {
             executionMicros: elapsedMicros,
             durationMicros: elapsedMicros,
             auditQuadruple,
+            ledgerEntry,
             error: ok ? undefined : (failureCode ?? undefined),
         }
 

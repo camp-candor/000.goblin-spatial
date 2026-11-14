@@ -2,6 +2,9 @@ import { MenuModel } from '../menu.model.js'
 import type MenuBit from '../fce/menu.bit.js'
 import type State from '../../99.core/state.js'
 import * as ActMnu from '../menu.action.js'
+import { SYNC_SPATIAL_CLOCK } from '../../05.clock.unit/clock.action.js'
+import { parseSpatialClockSnapshot } from '../../05.clock.unit/buz/clock.buzz.js'
+import type { SpatialClockSnapshot } from '../../05.clock.unit/fce/clock.interface.js'
 import { SPATIAL_MENU_CHOICES } from '../val/menu.model.js'
 import { runOpticalReciprocityAudit } from './02.topology-menu.buzz.js'
 import { runBatchQueryAggregator } from './13.collect-menu.buzz.js'
@@ -23,6 +26,10 @@ import {
 } from '../../28.axial.unit/val/axial.model.js'
 import { hasLineOfSightFinite } from '../../41.segment.unit/buz/segment.buzz.js'
 import { evaluateBruteForceOracleLoS } from '../../test/oracle.model.js'
+import {
+    buildSpatialEventStageBrief,
+    evaluateSpatialIncidentWitnesses,
+} from '../../23.incident.unit/buz/incident.buzz.js'
 
 const UPDATE_GRID = '[Grid action] Update Grid'
 const OPEN_CHOICE = '[Open action] Open Choice'
@@ -125,6 +132,14 @@ export const updateMenu = async (
                         tooltip =
                             '>> [TOOLTIP] Aggregate heterogeneous queries with fault isolation and RFC 8785 audit hash.'
                         break
+                    case '[06] RUN DIURNAL SENSORY CLOCK PROBE':
+                        tooltip =
+                            '>> [TOOLTIP] Preview diurnal luminance plus noise modifiers across five dayparts.'
+                        break
+                    case '[07] RUN SPATIAL EVENT WITNESS BLOCKING PROBE':
+                        tooltip =
+                            '>> [TOOLTIP] Preview spatial event blocking plus Fountain slugline cues.'
+                        break
                     case '[P] EXPORT SIGNED SPATIAL RECEIPT TO ENGINE':
                         tooltip =
                             '>> [TOOLTIP] Package acoustic and optical raycast proofs and stage signed receipt into 000.series-sower-engine.'
@@ -192,6 +207,16 @@ export const updateMenu = async (
 
         case '[05] RUN BATCH QUERY AGGREGATOR': {
             await ste.hunt(ActMnu.RUN_BATCH_QUERY_AGGREGATOR, {})
+            break
+        }
+
+        case '[06] RUN DIURNAL SENSORY CLOCK PROBE': {
+            await ste.hunt(ActMnu.RUN_DIURNAL_SENSORY_PROBE, {})
+            break
+        }
+
+        case '[07] RUN SPATIAL EVENT WITNESS BLOCKING PROBE': {
+            await ste.hunt(ActMnu.RUN_EVENT_BLOCKING_PROBE, {})
             break
         }
 
@@ -311,6 +336,243 @@ export const runBatchQueryAggregatorAudit = async (
     return cpy
 }
 
+export const DIURNAL_PROBE_SAMPLE_TIMES: readonly string[] = Object.freeze([
+    '05:30',
+    '09:00',
+    '14:00',
+    '18:00',
+    '21:00',
+])
+
+function resolveActiveClockSnapshot(ste?: State): SpatialClockSnapshot | null {
+    const fromState = (ste as any)?.value?.clock?.activeSnapshot
+    if (fromState !== undefined && fromState !== null) {
+        return fromState as SpatialClockSnapshot
+    }
+    const fromGlobal =
+        (globalThis as any).ACTIVE_SPATIAL_CLOCK_SNAPSHOT ??
+        (globalThis as any).ACTIVE_CLOCK_SNAPSHOT
+    if (fromGlobal !== undefined && fromGlobal !== null) {
+        return fromGlobal as SpatialClockSnapshot
+    }
+    return null
+}
+
+function readProbeDateInput(bal?: MenuBit): {
+    startDate: string
+    startTime: string
+    timezoneLabel: string
+} {
+    const dat = (bal?.dat ?? {}) as Record<string, unknown>
+    const startDate =
+        (dat.startDate as string | undefined) ??
+        (dat.start_date as string | undefined) ??
+        '2026-10-31'
+    const startTime =
+        (dat.startTime as string | undefined) ??
+        (dat.start_time as string | undefined) ??
+        (dat.start_time_hm as string | undefined) ??
+        '21:00'
+    const timezoneLabel =
+        (dat.timezoneLabel as string | undefined) ??
+        (dat.timezone_label as string | undefined) ??
+        'UTC+00:00'
+    return { startDate, startTime, timezoneLabel }
+}
+
+export const runDiurnalSensoryProbe = async (
+    cpy: MenuModel,
+    bal?: MenuBit,
+    ste?: State,
+): Promise<MenuModel> => {
+    const lib = (globalThis as any).LIBRARY
+    const { startDate, startTime, timezoneLabel } = readProbeDateInput(bal)
+
+    let activeSnapshot: SpatialClockSnapshot | null = null
+    try {
+        activeSnapshot = parseSpatialClockSnapshot({
+            startDate,
+            startTime,
+            timezoneLabel,
+        })
+    } catch {
+        activeSnapshot = null
+    }
+
+    if (activeSnapshot !== null && ste) {
+        try {
+            const hunt = (ste as any).hunt
+            if (typeof hunt === 'function') {
+                await hunt.call(ste, SYNC_SPATIAL_CLOCK, {
+                    idx: 'sync-clock-from-diurnal-probe',
+                    dat: { startDate, startTime, timezoneLabel },
+                })
+            }
+        } catch {
+            // Headless fallback keeps locally computed snapshot
+        }
+    }
+
+    if (activeSnapshot !== null) {
+        ;(globalThis as any).ACTIVE_SPATIAL_CLOCK_SNAPSHOT = activeSnapshot
+    }
+
+    const rows: string[] = []
+    for (const sampleTime of DIURNAL_PROBE_SAMPLE_TIMES) {
+        try {
+            const sample = parseSpatialClockSnapshot({
+                startDate,
+                startTime: sampleTime,
+                timezoneLabel,
+            })
+            rows.push(
+                `>> [SPATIAL:DIURNAL] ${sample.daypart} (${sample.clockTimeHm}) | LUM: ${sample.diurnalProfile.ambientLuminanceBps} bps | RANGE: ${sample.diurnalProfile.opticalRangeScaleBps} bps | NOISE: ${sample.diurnalProfile.diurnalNoiseDeltaCdb} cdB`,
+            )
+        } catch {
+            rows.push(`:: [SPATIAL:DIURNAL] invalid sample time ${sampleTime}`)
+        }
+    }
+
+    if (lib && typeof lib.hunt === 'function') {
+        for (const row of rows) {
+            await lib.hunt(WRITE_CONSOLE, { idx: 'cns00', src: row })
+        }
+    }
+
+    cpy.activeMenuMode = 'DIURNAL_AUDIT'
+    cpy.lastActionTimestamp = Date.now()
+    cpy.statusMessage = 'DIURNAL_PROBE_COMPLETE'
+    cpy.lastAuditSummary =
+        activeSnapshot === null
+            ? 'diurnal_probe: invalid start date or time'
+            : `diurnal_probe: ${activeSnapshot.daypart} @ ${activeSnapshot.clockTimeHm} LUM ${activeSnapshot.diurnalProfile.ambientLuminanceBps} bps`
+
+    if (bal?.slv) {
+        bal.slv({
+            mnuBit: {
+                idx: 'diurnal-sensory-probe-success',
+                val: 1,
+                dat: {
+                    rows,
+                    snapshot: activeSnapshot,
+                    daypart: activeSnapshot?.daypart ?? null,
+                },
+            },
+        })
+    }
+    return cpy
+}
+
+export const EVENT_BLOCKING_MENU_LABEL =
+    '[07] RUN SPATIAL EVENT WITNESS BLOCKING PROBE'
+
+function toAsciiProbeLine(value: string): string {
+    return String(value || '')
+        .replace(/[^\x20-\x7E]/g, '')
+        .trim()
+}
+
+export const runEventBlockingProbe = async (
+    cpy: MenuModel,
+    bal?: MenuBit,
+    ste?: State,
+): Promise<MenuModel> => {
+    const lib = (globalThis as any).LIBRARY
+    const dat = (bal?.dat ?? {}) as Record<string, unknown>
+    const startDate =
+        (dat.startDate as string | undefined) ??
+        (dat.start_date as string | undefined) ??
+        '2026-10-31'
+    const startTime =
+        (dat.startTime as string | undefined) ??
+        (dat.start_time as string | undefined) ??
+        (dat.startTimeHm as string | undefined) ??
+        '14:00'
+    const locationId =
+        (dat.locationId as string | undefined) ?? 'BRASS_WORKSHOP'
+    const locationName = (dat.locationName as string | undefined) ?? locationId
+    const isExterior = dat.isExterior === true
+    const rawOrigin = dat.originCoord as
+        { q: number; r: number; s?: number } | undefined
+    const originCoord =
+        rawOrigin !== undefined &&
+        Number.isInteger(rawOrigin.q) &&
+        Number.isInteger(rawOrigin.r)
+            ? createAxialCoord(rawOrigin.q, rawOrigin.r)
+            : createAxialCoord(0, 0)
+    const rawActors = dat.actors as
+        Array<{ actorId: string; coord: { q: number; r: number } }> | undefined
+    const actors =
+        Array.isArray(rawActors) && rawActors.length > 0
+            ? rawActors.map((a) => ({
+                  actorId: String(a.actorId),
+                  coord: createAxialCoord(Number(a.coord.q), Number(a.coord.r)),
+              }))
+            : [
+                  { actorId: 'ALICE', coord: createAxialCoord(0, 1) },
+                  { actorId: 'BOB', coord: createAxialCoord(1, 0) },
+              ]
+    const rawOpaque = dat.opaqueCells as
+        Array<{ q: number; r: number }> | undefined
+    const opaqueCells =
+        Array.isArray(rawOpaque) && rawOpaque.length > 0
+            ? rawOpaque.map((c) => createAxialCoord(Number(c.q), Number(c.r)))
+            : []
+    const report = evaluateSpatialIncidentWitnesses({
+        locationId,
+        originCoord: originCoord as never,
+        actors: actors as never,
+        startDate,
+        startTime,
+        opaqueCells: opaqueCells as never,
+    })
+    const brief = buildSpatialEventStageBrief(report, {
+        locationId,
+        locationName,
+        isExterior,
+    })
+    const lines = [
+        toAsciiProbeLine(`>> [SPATIAL:SLUGLINE] ${brief.sluglineToken}`),
+        toAsciiProbeLine(`>> [SPATIAL:ACTION] ${brief.lightingActionLine}`),
+        toAsciiProbeLine(`>> [SPATIAL:ACTION] ${brief.acousticActionLine}`),
+        toAsciiProbeLine(
+            `>> [SPATIAL:WITNESSES] ${brief.witnessParentheticalHint} visible=${report.visibleWitnessIds.join(',') || 'none'} audible=${report.audibleWitnessIds.join(',') || 'none'}`,
+        ),
+        toAsciiProbeLine(`>> [SPATIAL:TRANSITION] ${brief.exitTransitionHint}`),
+    ]
+    if (lib && typeof lib.hunt === 'function') {
+        for (const line of lines) {
+            await lib.hunt(WRITE_CONSOLE, { idx: 'cns00', src: line })
+        }
+    }
+    if (ste && typeof (ste as { hunt?: unknown }).hunt === 'function') {
+        for (const line of lines) {
+            try {
+                await (
+                    ste as unknown as {
+                        hunt: (a: string, b: unknown) => Promise<unknown>
+                    }
+                ).hunt(WRITE_CONSOLE, { idx: 'cns00', src: line })
+            } catch {
+                break
+            }
+        }
+    }
+    cpy.activeMenuMode = 'EVENT_BLOCKING'
+    cpy.statusMessage = 'EVENT_BLOCKING_PROBE_COMPLETE'
+    cpy.lastAuditSummary = `event-blocking-probe: ${brief.sluglineToken}`
+    if (bal?.slv) {
+        bal.slv({
+            mnuBit: {
+                idx: 'event-blocking-probe',
+                val: 1,
+                dat: { report, brief },
+            },
+        })
+    }
+    return cpy
+}
+
 export const EXPORT_RECEIPT_MENU_LABEL =
     '[P] EXPORT SIGNED SPATIAL RECEIPT TO ENGINE'
 
@@ -405,11 +667,39 @@ export const exportSignedSpatialReceiptMenuBuzz = async (
     }
 
     // Stage the packaged proof payload downstream into the sower engine filesystem.
+    // Thread active 05.clock.unit snapshot into dispatch so exported proofs
+    // carry SpatialChronologyStamp metadata downstream.
+    const explicitDat = ((bal as any)?.dat || {}) as Record<string, unknown>
+    const activeSnap = resolveActiveClockSnapshot(ste)
+    const exportStartDate =
+        (explicitDat.startDate as string | undefined) ??
+        (explicitDat.start_date as string | undefined) ??
+        activeSnap?.startDate
+    const exportStartTime =
+        (explicitDat.startTime as string | undefined) ??
+        (explicitDat.start_time as string | undefined) ??
+        (explicitDat.start_time_hm as string | undefined) ??
+        (activeSnap !== null && activeSnap !== undefined
+            ? `${String(activeSnap.hour).padStart(2, '0')}:${String(activeSnap.minute).padStart(2, '0')}`
+            : undefined)
+    const exportTimezone =
+        (explicitDat.timezoneLabel as string | undefined) ??
+        (explicitDat.timezone_label as string | undefined) ??
+        activeSnap?.timezoneLabel
     const dispatchBal = {
         ...(bal || {}),
         src: seriesSlug,
         dat: {
-            ...((bal as any)?.dat || {}),
+            ...explicitDat,
+            ...(exportStartDate !== undefined
+                ? { startDate: exportStartDate }
+                : {}),
+            ...(exportStartTime !== undefined
+                ? { startTime: exportStartTime }
+                : {}),
+            ...(exportTimezone !== undefined
+                ? { timezoneLabel: exportTimezone }
+                : {}),
             seriesSlug,
             receiptData: (bal as any)?.dat?.receiptData || {
                 topology_hash: topologyHash,

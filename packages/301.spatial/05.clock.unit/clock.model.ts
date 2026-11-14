@@ -1,8 +1,10 @@
-import Clock from './fce/clock.interface'
-import ClockBit from './fce/clock.interface'
+import type Clock from './fce/clock.interface.js'
+import type {
+    DiurnalAttenuationProfile,
+    SpatialClockSnapshot,
+} from './fce/clock.interface.js'
 
 export class ClockModel implements Clock {
-    //idx:string;
-    //clockBitList: ClockBit[] = [];
-    //clockBits: any = {};
+    activeSnapshot: SpatialClockSnapshot | null = null
+    activeDiurnalProfile: DiurnalAttenuationProfile | null = null
 }

@@ -1,8 +1,6 @@
-import Incident from './fce/incident.interface'
-import IncidentBit from './fce/incident.interface'
+import Incident from './fce/incident.interface.js'
 
 export class IncidentModel implements Incident {
-    //idx:string;
-    //incidentBitList: IncidentBit[] = [];
-    //incidentBits: any = {};
+    lastIncidentReport: unknown = null
+    incidentReceiptCount: number = 0
 }
