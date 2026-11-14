@@ -7,6 +7,7 @@ export type MenuMode =
     | 'DIURNAL_AUDIT'
     | 'EVENT_BLOCKING'
     | 'CHRONO_AGENDA'
+    | 'RECURRENCE_CALENDAR'
 
 export interface MenuChoiceItem {
     readonly id: string

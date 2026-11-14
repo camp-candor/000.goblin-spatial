@@ -4,11 +4,24 @@ import type State from '../../99.core/state.js'
 import type {
     DiurnalAttenuationProfile,
     DiurnalDaypart,
+    ExpandedSpatialAppointmentWindow,
+    LunarPhaseToken,
+    RecurrenceBlackoutDeferral,
+    RecurrenceBlackoutSkip,
     ScheduledSpatialAppointment,
     AppointmentDiurnalWindow,
     SpatialClockSnapshot,
+    SpatialLunarOpticsProfile,
+    SpatialSeriesBlackout,
+    WeekdayToken,
 } from '../fce/clock.interface.js'
-import { ScheduledSpatialAppointmentSchema } from '../fce/clock.interface.js'
+import {
+    ScheduledSpatialAppointmentSchema,
+    SpatialRecurrenceRuleSchema,
+} from '../fce/clock.interface.js'
+
+export const SYNODIC_MONTH_SECONDS = 2551443
+export const REF_NEW_MOON_SEC = 947182440
 
 export const DIURNAL_PROFILE_TABLE: Readonly<
     Record<DiurnalDaypart, DiurnalAttenuationProfile>
@@ -504,4 +517,547 @@ export const deriveDiurnalProfile = (
         })
     }
     return cpy
+}
+
+const WEEKDAY_TOKENS: readonly WeekdayToken[] = Object.freeze([
+    'MON',
+    'TUE',
+    'WED',
+    'THU',
+    'FRI',
+    'SAT',
+    'SUN',
+])
+
+void WEEKDAY_TOKENS
+void SpatialRecurrenceRuleSchema
+
+function parseIsoDateStrict(isoDate: string): {
+    year: number
+    month: number
+    day: number
+} {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(isoDate))
+    if (!m) {
+        throw new Error('INVALID_SPATIAL_DATE: expected YYYY-MM-DD')
+    }
+    const year = Number(m[1])
+    const month = Number(m[2])
+    const day = Number(m[3])
+    if (month < 1 || month > 12) {
+        throw new Error('INVALID_SPATIAL_DATE: month out of range 01..12')
+    }
+    const dim = daysInMonth(year, month)
+    if (day < 1 || day > dim) {
+        throw new Error('INVALID_SPATIAL_DATE: day out of range for month')
+    }
+    return { year, month, day }
+}
+
+function isoDateToUtcSec(isoDate: string): number {
+    const { year, month, day } = parseIsoDateStrict(isoDate)
+    return Math.trunc(Date.UTC(year, month - 1, day) / 1000)
+}
+
+function formatUtcSecToIsoDate(utcSec: number): string {
+    const d = new Date(utcSec * 1000)
+    const y = d.getUTCFullYear()
+    const m = d.getUTCMonth() + 1
+    const day = d.getUTCDate()
+    return (
+        String(y).padStart(4, '0') +
+        '-' +
+        String(m).padStart(2, '0') +
+        '-' +
+        String(day).padStart(2, '0')
+    )
+}
+
+function addDaysIso(isoDate: string, deltaDays: number): string {
+    const base = isoDateToUtcSec(isoDate)
+    return formatUtcSecToIsoDate(base + Math.trunc(deltaDays) * 86400)
+}
+
+function diffDaysIso(fromIso: string, toIso: string): number {
+    return Math.trunc(
+        (isoDateToUtcSec(toIso) - isoDateToUtcSec(fromIso)) / 86400,
+    )
+}
+
+export function resolveSpatialWeekday(isoDate: string): WeekdayToken {
+    const { year, month, day } = parseIsoDateStrict(isoDate)
+    const t = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4]
+    let y = year
+    if (month < 3) y -= 1
+    const dow =
+        (y +
+            Math.floor(y / 4) -
+            Math.floor(y / 100) +
+            Math.floor(y / 400) +
+            t[month - 1] +
+            day) %
+        7
+    switch (dow) {
+        case 0:
+            return 'SUN'
+        case 1:
+            return 'MON'
+        case 2:
+            return 'TUE'
+        case 3:
+            return 'WED'
+        case 4:
+            return 'THU'
+        case 5:
+            return 'FRI'
+        case 6:
+            return 'SAT'
+        default:
+            throw new Error('INVALID_SPATIAL_DATE: weekday resolution failed')
+    }
+}
+
+function phaseForFractionAge(ageSec: number): LunarPhaseToken {
+    const eight = ageSec * 8
+    const s = SYNODIC_MONTH_SECONDS
+    if (eight < s * 1 || eight >= s * 7) return 'NEW_MOON'
+    if (eight < s * 3) return 'FIRST_QUARTER'
+    if (eight < s * 5) return 'FULL_MOON'
+    return 'LAST_QUARTER'
+}
+
+export function computeSpatialLunarOptics(
+    isoDate: string,
+    startTimeHm: string,
+): SpatialLunarOpticsProfile {
+    const snapshot = parseSpatialClockSnapshot({
+        startDate: isoDate,
+        startTime: startTimeHm,
+    })
+    const dateSec = isoDateToUtcSec(snapshot.startDate)
+    const age =
+        (((dateSec - REF_NEW_MOON_SEC) % SYNODIC_MONTH_SECONDS) +
+            SYNODIC_MONTH_SECONDS) %
+        SYNODIC_MONTH_SECONDS
+    const lunarPhase = phaseForFractionAge(age)
+    const lunarIlluminationBps =
+        lunarPhase === 'FULL_MOON'
+            ? 10000
+            : lunarPhase === 'NEW_MOON'
+              ? 0
+              : 5000
+    const nocturnal =
+        snapshot.daypart === 'NIGHT' || snapshot.daypart === 'DUSK'
+    const nightLuminanceBoostBps = nocturnal
+        ? Math.floor((lunarIlluminationBps * 1500) / 10000)
+        : 0
+    const nightOpticalRangeBoostBps = nocturnal
+        ? Math.floor((lunarIlluminationBps * 2000) / 10000)
+        : 0
+    return Object.freeze({
+        lunarPhase,
+        lunarIlluminationBps,
+        nightLuminanceBoostBps,
+        nightOpticalRangeBoostBps,
+    })
+}
+
+function solarEventForDate(isoDate: string): string | null {
+    const { month, day } = parseIsoDateStrict(isoDate)
+    const key =
+        String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0')
+    if (key === '03-20') return 'SPRING_EQUINOX'
+    if (key === '06-21') return 'SUMMER_SOLSTICE'
+    if (key === '09-22') return 'AUTUMN_EQUINOX'
+    if (key === '12-21') return 'WINTER_SOLSTICE'
+    return null
+}
+
+function isSolarEventMatch(
+    isoDate: string,
+    filter: string | undefined,
+): boolean {
+    const evt = solarEventForDate(isoDate)
+    if (evt === null) return false
+    if (filter === undefined || filter === null || filter === '') return true
+    return evt === filter
+}
+
+function normalizeBlackoutMap(
+    ruleBlackouts: readonly string[] | undefined,
+    rulePolicy: string | undefined,
+    seriesBlackouts: readonly SpatialSeriesBlackout[] | undefined,
+): Map<string, string> {
+    const map = new Map<string, string>()
+    const put = (iso: string, policy: string): void => {
+        parseIsoDateStrict(iso)
+        const prev = map.get(iso)
+        if (prev === 'DEFER_NEXT_VALID_DAY') return
+        if (policy === 'DEFER_NEXT_VALID_DAY') {
+            map.set(iso, policy)
+            return
+        }
+        if (prev === undefined) map.set(iso, 'SKIP')
+    }
+    for (const d of ruleBlackouts ?? []) {
+        put(String(d), String(rulePolicy ?? 'SKIP'))
+    }
+    for (const entry of seriesBlackouts ?? []) {
+        if (typeof entry === 'string') {
+            put(entry, 'SKIP')
+        } else if (entry !== null && typeof entry === 'object') {
+            const obj = entry as { isoDate?: unknown; policy?: unknown }
+            if (typeof obj.isoDate === 'string') {
+                put(
+                    obj.isoDate,
+                    typeof obj.policy === 'string' ? obj.policy : 'SKIP',
+                )
+            }
+        }
+    }
+    return map
+}
+
+function generateCandidateDates(
+    appointmentIso: string,
+    ruleKind: string,
+    rule: {
+        weeklyMask?: readonly string[]
+        intervalDays?: number
+        lunarPhase?: string
+        solarEvent?: string
+    },
+    anchorTimeHm: string,
+    startIsoDate: string,
+    horizonDays: number,
+): string[] {
+    const out: string[] = []
+    if (ruleKind === 'ONCE') {
+        const cmpStart = diffDaysIso(startIsoDate, appointmentIso)
+        if (cmpStart >= 0 && cmpStart < horizonDays) out.push(appointmentIso)
+        return out
+    }
+    for (let i = 0; i < horizonDays; i++) {
+        const cand = addDaysIso(startIsoDate, i)
+        if (ruleKind === 'DAILY') {
+            out.push(cand)
+        } else if (ruleKind === 'WEEKLY_MASK') {
+            const mask = rule.weeklyMask ?? []
+            if (mask.length === 0) continue
+            const wd = resolveSpatialWeekday(cand)
+            if ((mask as readonly string[]).includes(wd)) out.push(cand)
+        } else if (ruleKind === 'INTERVAL_DAYS') {
+            const n = rule.intervalDays ?? 1
+            const diff = diffDaysIso(appointmentIso, cand)
+            if (diff >= 0 && diff % n === 0) out.push(cand)
+        } else if (ruleKind === 'LUNAR_PHASE') {
+            const want = rule.lunarPhase
+            if (want === undefined) continue
+            const optics = computeSpatialLunarOptics(cand, anchorTimeHm)
+            if (optics.lunarPhase === want) out.push(cand)
+        } else if (ruleKind === 'SOLAR_SOLSTICE_EQUINOX') {
+            if (isSolarEventMatch(cand, rule.solarEvent)) out.push(cand)
+        }
+    }
+    return out
+}
+
+export function expandSpatialRecurringAppointments(
+    appointments: readonly ScheduledSpatialAppointment[],
+    startIsoDate: string,
+    horizonDays: number,
+    seriesBlackouts: readonly SpatialSeriesBlackout[] = [],
+): ExpandedSpatialAppointmentWindow[] {
+    parseIsoDateStrict(startIsoDate)
+    if (!Number.isInteger(horizonDays) || horizonDays < 0) {
+        throw new Error('INVALID_SPATIAL_HORIZON: horizonDays integer >= 0')
+    }
+    if (horizonDays === 0)
+        return Object.freeze([]) as ExpandedSpatialAppointmentWindow[]
+    const windowEndExclusive = addDaysIso(startIsoDate, horizonDays)
+    const collected: ExpandedSpatialAppointmentWindow[] = []
+    for (const raw of appointments ?? []) {
+        const parsed = ScheduledSpatialAppointmentSchema.safeParse(raw)
+        if (!parsed.success) {
+            const issues = parsed.error.issues
+            const hasDate = issues.some((x) =>
+                String((x.path ?? []).join('.')).includes('isoDate'),
+            )
+            if (hasDate) {
+                throw new Error(
+                    'INVALID_SPATIAL_DATE: recurring appointment date rejected',
+                )
+            }
+            throw new Error(
+                'INVALID_SPATIAL_APPOINTMENT: recurring appointment rejected',
+            )
+        }
+        const appt = parsed.data
+        const rule = (appt.recurrenceRule ?? {
+            recurrenceKind: 'ONCE',
+            blackoutPolicy: 'SKIP',
+        }) as {
+            recurrenceKind: string
+            weeklyMask?: readonly string[]
+            intervalDays?: number
+            lunarPhase?: string
+            solarEvent?: string
+            blackoutDates?: readonly string[]
+            blackoutPolicy?: string
+            untilIsoDate?: string
+            maxOccurrences?: number
+        }
+        const kind = rule.recurrenceKind ?? 'ONCE'
+        let candidates = generateCandidateDates(
+            appt.isoDate,
+            kind,
+            rule,
+            appt.startTimeHm,
+            startIsoDate,
+            horizonDays,
+        )
+        if (rule.untilIsoDate !== undefined) {
+            parseIsoDateStrict(rule.untilIsoDate)
+            candidates = candidates.filter(
+                (c) => diffDaysIso(c, rule.untilIsoDate as string) >= 0,
+            )
+        }
+        const blackoutMap = normalizeBlackoutMap(
+            rule.blackoutDates,
+            rule.blackoutPolicy,
+            seriesBlackouts,
+        )
+        const emitted: string[] = []
+        const emittedSet = new Set<string>()
+        const maxOcc = rule.maxOccurrences
+        for (const cand of candidates) {
+            if (maxOcc !== undefined && emitted.length >= maxOcc) break
+            const policy = blackoutMap.get(cand)
+            if (policy === undefined) {
+                if (!emittedSet.has(cand)) {
+                    emitted.push(cand)
+                    emittedSet.add(cand)
+                }
+            } else if (policy === 'SKIP') {
+                continue
+            } else {
+                let deferred = addDaysIso(cand, 1)
+                let guard = 0
+                while (blackoutMap.has(deferred) && guard < 366) {
+                    deferred = addDaysIso(deferred, 1)
+                    guard += 1
+                }
+                if (diffDaysIso(startIsoDate, deferred) < 0) continue
+                if (diffDaysIso(deferred, windowEndExclusive) <= 0) continue
+                if (
+                    rule.untilIsoDate !== undefined &&
+                    diffDaysIso(deferred, rule.untilIsoDate) < 0
+                ) {
+                    continue
+                }
+                if (!emittedSet.has(deferred)) {
+                    emitted.push(deferred)
+                    emittedSet.add(deferred)
+                }
+            }
+            if (maxOcc !== undefined && emitted.length >= maxOcc) break
+        }
+        emitted.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        const capped = maxOcc !== undefined ? emitted.slice(0, maxOcc) : emitted
+        for (const iso of capped) {
+            const snap = parseSpatialClockSnapshot({
+                startDate: iso,
+                startTime: appt.startTimeHm,
+            })
+            const weekday = resolveSpatialWeekday(iso)
+            const lunarOptics = computeSpatialLunarOptics(iso, appt.startTimeHm)
+            const base = snap.diurnalProfile
+            const effective: DiurnalAttenuationProfile = Object.freeze({
+                daypart: base.daypart,
+                ambientLuminanceBps: Math.min(
+                    10000,
+                    Math.max(
+                        0,
+                        base.ambientLuminanceBps +
+                            lunarOptics.nightLuminanceBoostBps,
+                    ),
+                ),
+                opticalRangeScaleBps: Math.min(
+                    10000,
+                    Math.max(
+                        0,
+                        base.opticalRangeScaleBps +
+                            lunarOptics.nightOpticalRangeBoostBps,
+                    ),
+                ),
+                diurnalNoiseDeltaCdb: base.diurnalNoiseDeltaCdb,
+            })
+            const win: ExpandedSpatialAppointmentWindow = Object.freeze({
+                beatId: appt.beatId,
+                title: appt.title,
+                isoDate: iso,
+                startTimeHm: appt.startTimeHm,
+                beatCategory: appt.beatCategory,
+                ...(appt.locationId !== undefined
+                    ? { locationId: appt.locationId }
+                    : {}),
+                ...(((appt as { participantIds?: readonly string[] })
+                    .participantIds ?? undefined) !== undefined
+                    ? {
+                          participantIds: Object.freeze([
+                              ...((
+                                  appt as { participantIds?: readonly string[] }
+                              ).participantIds as readonly string[]),
+                          ]),
+                      }
+                    : {}),
+                weekday,
+                daypart: snap.daypart,
+                lunarOptics: Object.freeze({ ...lunarOptics }),
+                effectiveDiurnalProfile: effective,
+                occurrenceKey: appt.beatId + '@' + iso,
+                reserveCooldownTicks: appt.reserveCooldownTicks,
+            })
+            collected.push(win)
+        }
+    }
+    collected.sort((a, b) => {
+        if (a.isoDate !== b.isoDate) return a.isoDate < b.isoDate ? -1 : 1
+        if (a.startTimeHm !== b.startTimeHm) {
+            return a.startTimeHm < b.startTimeHm ? -1 : 1
+        }
+        if (a.beatId !== b.beatId) return a.beatId < b.beatId ? -1 : 1
+        return 0
+    })
+    return Object.freeze(collected) as ExpandedSpatialAppointmentWindow[]
+}
+
+export interface RecurrenceExpansionAudit {
+    readonly windows: readonly ExpandedSpatialAppointmentWindow[]
+    readonly skips: readonly RecurrenceBlackoutSkip[]
+    readonly deferrals: readonly RecurrenceBlackoutDeferral[]
+}
+
+export function expandSpatialRecurringAppointmentsWithAudit(
+    appointments: readonly ScheduledSpatialAppointment[],
+    startIsoDate: string,
+    horizonDays: number,
+    seriesBlackouts: readonly SpatialSeriesBlackout[] = [],
+): RecurrenceExpansionAudit {
+    const windows = expandSpatialRecurringAppointments(
+        appointments,
+        startIsoDate,
+        horizonDays,
+        seriesBlackouts,
+    )
+    const skips: RecurrenceBlackoutSkip[] = []
+    const deferrals: RecurrenceBlackoutDeferral[] = []
+    const windowEndExclusive = addDaysIso(startIsoDate, horizonDays)
+    const emittedByBeat = new Map<string, Set<string>>()
+    for (const w of windows) {
+        let set = emittedByBeat.get(w.beatId)
+        if (set === undefined) {
+            set = new Set<string>()
+            emittedByBeat.set(w.beatId, set)
+        }
+        set.add(w.isoDate)
+    }
+    for (const raw of appointments ?? []) {
+        const parsed = ScheduledSpatialAppointmentSchema.safeParse(raw)
+        if (!parsed.success) continue
+        const appt = parsed.data
+        const rule = (appt.recurrenceRule ?? {
+            recurrenceKind: 'ONCE',
+            blackoutPolicy: 'SKIP',
+        }) as {
+            recurrenceKind: string
+            weeklyMask?: readonly string[]
+            intervalDays?: number
+            lunarPhase?: string
+            solarEvent?: string
+            blackoutDates?: readonly string[]
+            blackoutPolicy?: string
+            untilIsoDate?: string
+            maxOccurrences?: number
+        }
+        let candidates = generateCandidateDates(
+            appt.isoDate,
+            rule.recurrenceKind ?? 'ONCE',
+            rule,
+            appt.startTimeHm,
+            startIsoDate,
+            horizonDays,
+        )
+        if (rule.untilIsoDate !== undefined) {
+            candidates = candidates.filter(
+                (c) => diffDaysIso(c, rule.untilIsoDate as string) >= 0,
+            )
+        }
+        const blackoutMap = normalizeBlackoutMap(
+            rule.blackoutDates,
+            rule.blackoutPolicy,
+            seriesBlackouts,
+        )
+        const emittedSet = emittedByBeat.get(appt.beatId) ?? new Set<string>()
+        for (const cand of candidates) {
+            const policy = blackoutMap.get(cand)
+            if (policy === undefined) continue
+            if (policy === 'SKIP') {
+                if (!emittedSet.has(cand)) {
+                    skips.push(
+                        Object.freeze({
+                            beatId: appt.beatId,
+                            isoDate: cand,
+                            policy: 'SKIP' as const,
+                        }),
+                    )
+                }
+            } else {
+                let deferred = addDaysIso(cand, 1)
+                let guard = 0
+                while (blackoutMap.has(deferred) && guard < 366) {
+                    deferred = addDaysIso(deferred, 1)
+                    guard += 1
+                }
+                if (
+                    diffDaysIso(startIsoDate, deferred) < 0 ||
+                    diffDaysIso(deferred, windowEndExclusive) <= 0 ||
+                    (rule.untilIsoDate !== undefined &&
+                        diffDaysIso(deferred, rule.untilIsoDate) < 0)
+                ) {
+                    skips.push(
+                        Object.freeze({
+                            beatId: appt.beatId,
+                            isoDate: cand,
+                            policy: 'DEFER_NEXT_VALID_DAY' as const,
+                        }),
+                    )
+                    continue
+                }
+                deferrals.push(
+                    Object.freeze({
+                        beatId: appt.beatId,
+                        fromIsoDate: cand,
+                        toIsoDate: deferred,
+                        policy: 'DEFER_NEXT_VALID_DAY' as const,
+                    }),
+                )
+            }
+        }
+    }
+    skips.sort((a, b) => {
+        if (a.isoDate !== b.isoDate) return a.isoDate < b.isoDate ? -1 : 1
+        return a.beatId < b.beatId ? -1 : 1
+    })
+    deferrals.sort((a, b) => {
+        if (a.fromIsoDate !== b.fromIsoDate) {
+            return a.fromIsoDate < b.fromIsoDate ? -1 : 1
+        }
+        return a.beatId < b.beatId ? -1 : 1
+    })
+    return Object.freeze({
+        windows,
+        skips: Object.freeze(skips),
+        deferrals: Object.freeze(deferrals),
+    })
 }

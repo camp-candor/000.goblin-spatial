@@ -72,6 +72,13 @@ export function reducer(
         case Act.PROBE_CHRONO_AGENDA:
             return Buzz.runChronoAgendaProbe(cloneModel(model), act.bale, state)
 
+        case Act.PROBE_RECURRENCE_CALENDAR:
+            return Buzz.runRecurrenceCalendarProbe(
+                cloneModel(model),
+                act.bale,
+                state,
+            )
+
         default:
             return model
     }

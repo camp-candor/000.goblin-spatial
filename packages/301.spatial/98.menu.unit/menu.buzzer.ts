@@ -10,6 +10,8 @@ export {
     EVENT_BLOCKING_MENU_LABEL,
     runChronoAgendaProbe,
     CHRONO_AGENDA_MENU_LABEL,
+    runRecurrenceCalendarProbe,
+    RECURRENCE_CALENDAR_MENU_LABEL,
     exportSignedSpatialReceiptMenuBuzz,
     EXPORT_RECEIPT_MENU_LABEL,
     MenuDispatcher,

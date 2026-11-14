@@ -67,6 +67,13 @@ export class ProbeChronoAgenda implements Action<MenuBit> {
     constructor(public bale?: MenuBit) {}
 }
 
+export const PROBE_RECURRENCE_CALENDAR =
+    '[Menu action] Probe Recurrence Calendar'
+export class ProbeRecurrenceCalendar implements Action<MenuBit> {
+    readonly type = PROBE_RECURRENCE_CALENDAR
+    constructor(public bale?: MenuBit) {}
+}
+
 export type Actions =
     | InitMenu
     | UpdateMenu
@@ -78,3 +85,4 @@ export type Actions =
     | ExportSignedSpatialReceipt
     | RunEventBlockingProbe
     | ProbeChronoAgenda
+    | ProbeRecurrenceCalendar

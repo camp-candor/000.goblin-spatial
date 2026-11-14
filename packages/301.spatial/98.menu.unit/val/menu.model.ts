@@ -9,6 +9,7 @@ export const SPATIAL_MENU_CHOICES = Object.freeze([
     '[06] RUN DIURNAL SENSORY CLOCK PROBE',
     '[07] RUN SPATIAL EVENT WITNESS BLOCKING PROBE',
     '[08] PROBE SCHEDULED STORY APPOINTMENTS',
+    '[09] PROBE RECURRING CALENDAR & LUNAR OPTICS',
     '[P] EXPORT SIGNED SPATIAL RECEIPT TO ENGINE',
     '[ROOT MENU]',
 ])
@@ -23,6 +24,7 @@ export const MenuModelConfigSchema = z
                 'DIURNAL_AUDIT',
                 'EVENT_BLOCKING',
                 'CHRONO_AGENDA',
+                'RECURRENCE_CALENDAR',
             ])
             .default('ROOT'),
         statusMessage: z.string().default('SPATIAL_ORACLE_READY'),

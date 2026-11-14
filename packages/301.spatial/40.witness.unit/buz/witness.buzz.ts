@@ -4,8 +4,14 @@ import {
     PackedAxial,
     createAxialCoord,
 } from '../../28.axial.unit/val/axial.model.js'
-import { evaluateAppointmentDiurnalWindow } from '../../05.clock.unit/buz/clock.buzz.js'
-import type { ScheduledSpatialAppointment } from '../../05.clock.unit/fce/clock.interface.js'
+import {
+    evaluateAppointmentDiurnalWindow,
+    expandSpatialRecurringAppointmentsWithAudit,
+} from '../../05.clock.unit/buz/clock.buzz.js'
+import type {
+    ScheduledSpatialAppointment,
+    SpatialSeriesBlackout,
+} from '../../05.clock.unit/fce/clock.interface.js'
 import { evaluateSpatialIncidentWitnesses } from '../../23.incident.unit/buz/incident.buzz.js'
 import { buildSpatialEventStageBrief } from '../../23.incident.unit/buz/incident.buzz.js'
 import type { ScheduledAppointmentSpatialProof } from '../fce/witness.interface.js'
@@ -323,4 +329,143 @@ export function stageScheduledAppointmentSpatialProof(
         witnessReport: Object.freeze(witnessReport),
         stageBrief: Object.freeze(stageBrief),
     }) as ScheduledAppointmentSpatialProof
+}
+
+export interface RecurringAppointmentSpatialProofOptions {
+    readonly startIsoDate: string
+    readonly horizonDays?: number
+    readonly seriesBlackouts?: readonly SpatialSeriesBlackout[]
+}
+
+export interface RecurringAppointmentSpatialProof {
+    readonly beatId: string
+    readonly title: string
+    readonly isoDate: string
+    readonly startTimeHm: string
+    readonly daypart: string
+    readonly weekday: string
+    readonly lunarPhase: string
+    readonly lunarIlluminationBps: number
+    readonly effectiveOpticalRangeBps: number
+    readonly locationId: string
+    readonly occurrenceKey: string
+    readonly reachableWitnessIds: readonly string[]
+    readonly witnessReport: unknown
+    readonly stageBrief: unknown
+}
+
+export interface StageRecurringAppointmentSpatialProofsResult {
+    readonly expandedProofs: readonly RecurringAppointmentSpatialProof[]
+    readonly blackoutSkips: readonly unknown[]
+    readonly blackoutDeferrals: readonly unknown[]
+}
+
+const VISIBILITY_THRESHOLD_RECURRENCE_BPS = 5000
+
+export function stageRecurringAppointmentSpatialProofs(
+    appointments: readonly ScheduledSpatialAppointment[],
+    topology: unknown,
+    actors: readonly AppointmentActorInput[],
+    options: RecurringAppointmentSpatialProofOptions,
+): StageRecurringAppointmentSpatialProofsResult {
+    if (options === null || typeof options !== 'object') {
+        throw new Error('INVALID_SPATIAL_RECURRENCE_OPTIONS: options required')
+    }
+    const startIsoDate = String(
+        (options as { startIsoDate?: unknown }).startIsoDate ?? '',
+    )
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(startIsoDate)) {
+        throw new Error('INVALID_SPATIAL_DATE: startIsoDate required')
+    }
+    const horizonDays = (options as { horizonDays?: unknown }).horizonDays ?? 14
+    if (!Number.isInteger(horizonDays) || (horizonDays as number) < 0) {
+        throw new Error('INVALID_SPATIAL_HORIZON: horizonDays integer >= 0')
+    }
+    const seriesBlackouts =
+        ((options as { seriesBlackouts?: unknown }).seriesBlackouts as
+            readonly SpatialSeriesBlackout[] | undefined) ?? []
+    const audit = expandSpatialRecurringAppointmentsWithAudit(
+        appointments,
+        startIsoDate,
+        horizonDays as number,
+        seriesBlackouts,
+    )
+    const actorList = [...(actors ?? [])] as AppointmentActorInput[]
+    const expandedProofs: RecurringAppointmentSpatialProof[] = []
+    for (const win of audit.windows) {
+        const staged = stageScheduledAppointmentSpatialProof(
+            topology,
+            actorList,
+            {
+                beatId: win.beatId,
+                title: win.title,
+                isoDate: win.isoDate,
+                startTimeHm: win.startTimeHm,
+                beatCategory: win.beatCategory,
+                ...(win.locationId !== undefined
+                    ? { locationId: win.locationId }
+                    : {}),
+                reserveCooldownTicks: win.reserveCooldownTicks,
+            } as ScheduledSpatialAppointment,
+        )
+        const optics = win.lunarOptics
+        const baseRange = staged.witnessReport.diurnalProfile
+            .opticalRangeScaleBps as number
+        const effectiveOpticalRangeBps = Math.min(
+            10000,
+            Math.max(
+                0,
+                (Number(baseRange) || 0) + optics.nightOpticalRangeBoostBps,
+            ),
+        )
+        const witnesses = [
+            ...(staged.witnessReport.witnesses as unknown as Array<{
+                actorId: string
+                transmissionBps: number
+                effectiveTransmissionBps: number
+                sawEvent: boolean
+            }>),
+        ]
+        const reachable: string[] = []
+        for (const w of witnesses) {
+            const tx = Number(w.transmissionBps) || 0
+            const boosted = Math.floor((tx * effectiveOpticalRangeBps) / 10000)
+            const rawBlocked = tx < VISIBILITY_THRESHOLD_RECURRENCE_BPS
+            const diurnalBlocked =
+                !rawBlocked && boosted < VISIBILITY_THRESHOLD_RECURRENCE_BPS
+            if (!rawBlocked && !diurnalBlocked) reachable.push(w.actorId)
+        }
+        reachable.sort((a, b) => (a < b ? -1 : a > b ? 1 : 0))
+        expandedProofs.push(
+            Object.freeze({
+                beatId: win.beatId,
+                title: win.title,
+                isoDate: win.isoDate,
+                startTimeHm: win.startTimeHm,
+                daypart: win.daypart,
+                weekday: win.weekday,
+                lunarPhase: optics.lunarPhase,
+                lunarIlluminationBps: optics.lunarIlluminationBps,
+                effectiveOpticalRangeBps,
+                locationId: staged.locationId,
+                occurrenceKey: win.occurrenceKey,
+                reachableWitnessIds: Object.freeze([...reachable]),
+                witnessReport: staged.witnessReport,
+                stageBrief: staged.stageBrief,
+            }) as RecurringAppointmentSpatialProof,
+        )
+    }
+    expandedProofs.sort((a, b) => {
+        if (a.isoDate !== b.isoDate) return a.isoDate < b.isoDate ? -1 : 1
+        if (a.startTimeHm !== b.startTimeHm) {
+            return a.startTimeHm < b.startTimeHm ? -1 : 1
+        }
+        if (a.beatId !== b.beatId) return a.beatId < b.beatId ? -1 : 1
+        return 0
+    })
+    return Object.freeze({
+        expandedProofs: Object.freeze([...expandedProofs]),
+        blackoutSkips: Object.freeze([...audit.skips]),
+        blackoutDeferrals: Object.freeze([...audit.deferrals]),
+    })
 }

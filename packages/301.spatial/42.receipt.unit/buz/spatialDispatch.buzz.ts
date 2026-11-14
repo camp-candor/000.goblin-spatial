@@ -17,8 +17,12 @@ import { evaluateSpatialIncidentWitnesses } from '../../23.incident.unit/buz/inc
 import { buildSpatialEventStageBrief } from '../../23.incident.unit/buz/incident.buzz.js'
 import { resetSpatialIncidentState } from '../../23.incident.unit/buz/incident.buzz.js'
 import { evaluateAgendaDiurnalSchedule } from '../../05.clock.unit/buz/clock.buzz.js'
-import type { ScheduledSpatialAppointment } from '../../05.clock.unit/fce/clock.interface.js'
+import type {
+    ScheduledSpatialAppointment,
+    SpatialSeriesBlackout,
+} from '../../05.clock.unit/fce/clock.interface.js'
 import { stageScheduledAppointmentSpatialProof } from '../../40.witness.unit/buz/witness.buzz.js'
+import { stageRecurringAppointmentSpatialProofs } from '../../40.witness.unit/buz/witness.buzz.js'
 
 const UPDATE_CONSOLE = '[Console action] Update Console'
 
@@ -763,5 +767,105 @@ export function verifySpatialAgendaReplayEquivalence(
         mismatches,
         proofBatchSha256: digestB,
         proofCount: second.proofCount,
+    })
+}
+
+export interface RecurringAgendaSpatialReceiptOptions {
+    readonly appointments: readonly ScheduledSpatialAppointment[]
+    readonly topology: unknown
+    readonly actors: ReadonlyArray<{ actorId: string; coord: unknown }>
+    readonly startIsoDate: string
+    readonly horizonDays?: number
+    readonly seriesBlackouts?: readonly SpatialSeriesBlackout[]
+    readonly outputDir?: string
+}
+
+export interface RecurringAgendaSpatialReceiptSummary {
+    readonly proofCount: number
+    readonly recurrenceExpansionDigest: string
+    readonly proofFile: string
+    readonly outputDir: string
+    readonly expandedProofs: readonly unknown[]
+    readonly blackoutSkips: readonly unknown[]
+    readonly blackoutDeferrals: readonly unknown[]
+}
+
+export function exportRecurringAgendaSpatialReceipt(
+    options: RecurringAgendaSpatialReceiptOptions,
+    ste?: State,
+): RecurringAgendaSpatialReceiptSummary {
+    if (options === null || typeof options !== 'object') {
+        throw new Error('INVALID_SPATIAL_RECEIPT_OPTIONS: options required')
+    }
+    const appointments = (options as { appointments?: unknown }).appointments
+    if (!Array.isArray(appointments)) {
+        throw new Error(
+            'INVALID_SPATIAL_RECEIPT_OPTIONS: appointments array required',
+        )
+    }
+    const topology = (options as { topology?: unknown }).topology ?? {
+        topologyId: 'BRASS_WORKSHOP',
+        nodes: { BRASS_WORKSHOP: { id: 'BRASS_WORKSHOP' } },
+    }
+    const actors =
+        ((options as { actors?: unknown }).actors as ReadonlyArray<{
+            actorId: string
+            coord: unknown
+        }>) ?? []
+    const startIsoDate = String(
+        (options as { startIsoDate?: unknown }).startIsoDate ?? '',
+    )
+    const horizonDays = (options as { horizonDays?: unknown }).horizonDays ?? 14
+    const seriesBlackouts =
+        ((options as { seriesBlackouts?: unknown }).seriesBlackouts as
+            readonly SpatialSeriesBlackout[] | undefined) ?? []
+    const outputDir =
+        ((options as { outputDir?: unknown }).outputDir as
+            string | undefined) ?? process.cwd()
+    const staged = stageRecurringAppointmentSpatialProofs(
+        appointments as readonly ScheduledSpatialAppointment[],
+        topology,
+        actors as never,
+        {
+            startIsoDate,
+            horizonDays: horizonDays as number,
+            seriesBlackouts,
+        },
+    )
+    const sorted = [...staged.expandedProofs].sort((a, b) => {
+        const x = a as { isoDate: string; startTimeHm: string; beatId: string }
+        const y = b as { isoDate: string; startTimeHm: string; beatId: string }
+        if (x.isoDate !== y.isoDate) return x.isoDate < y.isoDate ? -1 : 1
+        if (x.startTimeHm !== y.startTimeHm) {
+            return x.startTimeHm < y.startTimeHm ? -1 : 1
+        }
+        if (x.beatId !== y.beatId) return x.beatId < y.beatId ? -1 : 1
+        return 0
+    })
+    const recurrenceExpansionDigest = computeSha256Hex(canonicalizeJson(sorted))
+    assertSafeBatchDir(outputDir)
+    fs.mkdirSync(outputDir, { recursive: true })
+    const proofFile = path.join(outputDir, 'agenda-spatial-proofs.json')
+    const payload = {
+        blackoutDeferrals: [...staged.blackoutDeferrals],
+        blackoutSkips: [...staged.blackoutSkips],
+        expandedProofs: sorted,
+        proofCount: sorted.length,
+        recurrenceExpansionDigest,
+    }
+    const content = JSON.stringify(payload, null, 2).replace(/\r/g, '') + '\n'
+    fs.writeFileSync(proofFile, content, 'utf-8')
+    emitConsole(
+        ste,
+        `>> [SPATIAL:RECURRENCE_PROOF] occurrences=${sorted.length} skipped=${staged.blackoutSkips.length} deferred=${staged.blackoutDeferrals.length} digest=${recurrenceExpansionDigest.slice(0, 12)}`,
+    )
+    return Object.freeze({
+        blackoutDeferrals: Object.freeze([...staged.blackoutDeferrals]),
+        blackoutSkips: Object.freeze([...staged.blackoutSkips]),
+        expandedProofs: Object.freeze([...sorted]),
+        outputDir,
+        proofCount: sorted.length,
+        proofFile,
+        recurrenceExpansionDigest,
     })
 }

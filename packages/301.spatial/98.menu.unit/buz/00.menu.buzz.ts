@@ -32,6 +32,7 @@ import {
 } from '../../23.incident.unit/buz/incident.buzz.js'
 import { evaluateAgendaDiurnalSchedule } from '../../05.clock.unit/buz/clock.buzz.js'
 import { stageScheduledAppointmentSpatialProof } from '../../40.witness.unit/buz/witness.buzz.js'
+import { stageRecurringAppointmentSpatialProofs } from '../../40.witness.unit/buz/witness.buzz.js'
 import type { ScheduledSpatialAppointment } from '../../05.clock.unit/fce/clock.interface.js'
 
 const UPDATE_GRID = '[Grid action] Update Grid'
@@ -147,6 +148,10 @@ export const updateMenu = async (
                         tooltip =
                             '>> [TOOLTIP] Preview scheduled story appointments plus diurnal venue proofs.'
                         break
+                    case '[09] PROBE RECURRING CALENDAR & LUNAR OPTICS':
+                        tooltip =
+                            '>> [TOOLTIP] Preview recurring calendar plus lunar optics proofs.'
+                        break
                     case '[P] EXPORT SIGNED SPATIAL RECEIPT TO ENGINE':
                         tooltip =
                             '>> [TOOLTIP] Package acoustic and optical raycast proofs and stage signed receipt into 000.series-sower-engine.'
@@ -229,6 +234,11 @@ export const updateMenu = async (
 
         case '[08] PROBE SCHEDULED STORY APPOINTMENTS': {
             await ste.hunt(ActMnu.PROBE_CHRONO_AGENDA, {})
+            break
+        }
+
+        case '[09] PROBE RECURRING CALENDAR & LUNAR OPTICS': {
+            await ste.hunt(ActMnu.PROBE_RECURRENCE_CALENDAR, {})
             break
         }
 
@@ -898,6 +908,183 @@ export const runChronoAgendaProbe = async (
                 idx: 'probe-chrono-agenda',
                 val: 1,
                 dat: { proofs },
+            },
+        })
+    }
+    return cpy
+}
+
+export const RECURRENCE_CALENDAR_MENU_LABEL =
+    '[09] PROBE RECURRING CALENDAR & LUNAR OPTICS'
+
+function defaultRecurrenceAppointments(): ScheduledSpatialAppointment[] {
+    return [
+        {
+            beatId: 'beat-vigil-weekly',
+            title: 'Full Moon Vigil',
+            isoDate: '2026-10-26',
+            startTimeHm: '23:30',
+            beatCategory: 'vigil',
+            locationId: 'BRASS_WORKSHOP',
+            reserveCooldownTicks: 1,
+            recurrenceRule: {
+                recurrenceKind: 'WEEKLY_MASK',
+                weeklyMask: ['MON'],
+                blackoutPolicy: 'SKIP',
+            },
+        },
+        {
+            beatId: 'beat-market-daily',
+            title: 'Market Day',
+            isoDate: '2026-10-26',
+            startTimeHm: '14:00',
+            beatCategory: 'market',
+            locationId: 'BRASS_WORKSHOP',
+            reserveCooldownTicks: 0,
+            recurrenceRule: {
+                recurrenceKind: 'DAILY',
+                blackoutPolicy: 'SKIP',
+            },
+        },
+    ]
+}
+
+export const runRecurrenceCalendarProbe = async (
+    cpy: MenuModel,
+    bal?: MenuBit,
+    ste?: State,
+): Promise<MenuModel> => {
+    const lib = (globalThis as unknown as { LIBRARY?: unknown }).LIBRARY as
+        { hunt?: unknown } | undefined
+    const dat = ((bal?.dat ?? {}) as Record<string, unknown>) ?? {}
+    const appointments = Array.isArray(dat.appointments)
+        ? (dat.appointments as ScheduledSpatialAppointment[])
+        : defaultRecurrenceAppointments()
+    const topology =
+        (dat.topology as Record<string, unknown> | undefined) ??
+        (defaultChronoTopology() as Record<string, unknown>)
+    const actors = Array.isArray(dat.actors)
+        ? (dat.actors as Array<{ actorId: string; coord: AxialCoord }>)
+        : defaultChronoActors()
+    const startIsoDate =
+        (dat.startIsoDate as string | undefined) ??
+        (dat.start_date as string | undefined) ??
+        '2026-10-26'
+    const horizonDays =
+        (dat.horizonDays as number | undefined) ??
+        (dat.horizon_days as number | undefined) ??
+        14
+    const seriesBlackouts = Array.isArray(dat.seriesBlackouts)
+        ? (dat.seriesBlackouts as Array<string | { isoDate: string }>)
+        : []
+    const lines: string[] = []
+    let result: unknown = null
+    try {
+        const staged = stageRecurringAppointmentSpatialProofs(
+            appointments,
+            topology,
+            actors as never,
+            {
+                startIsoDate,
+                horizonDays: horizonDays as number,
+                seriesBlackouts: seriesBlackouts as never,
+            },
+        )
+        result = staged
+        for (const proof of staged.expandedProofs) {
+            const p = proof as {
+                isoDate: string
+                weekday: string
+                startTimeHm: string
+                daypart: string
+                lunarPhase: string
+                lunarIlluminationBps: number
+                locationId: string
+                reachableWitnessIds: readonly string[]
+            }
+            const nocturnal = p.daypart === 'NIGHT' || p.daypart === 'DUSK'
+            const boost = nocturnal
+                ? Math.floor((Number(p.lunarIlluminationBps) * 1500) / 10000)
+                : 0
+            lines.push(
+                toChronoAscii(
+                    `>> [SPATIAL:RECURRENCE] ${p.isoDate} (${p.weekday}) ${p.startTimeHm} | ${p.lunarPhase} (LUM+${boost}bps) | LOC ${p.locationId} | WITNESSES ${p.reachableWitnessIds.length}`,
+                ),
+            )
+        }
+        for (const skip of staged.blackoutSkips as Array<{
+            beatId: string
+            isoDate: string
+        }>) {
+            lines.push(
+                toChronoAscii(
+                    `>> [SPATIAL:BLACKOUT_SKIP] ${skip.beatId}@${skip.isoDate} skipped holiday blackout`,
+                ),
+            )
+        }
+        for (const def of staged.blackoutDeferrals as Array<{
+            beatId: string
+            fromIsoDate: string
+            toIsoDate: string
+        }>) {
+            lines.push(
+                toChronoAscii(
+                    `>> [SPATIAL:BLACKOUT_DEFER] ${def.beatId}@${def.fromIsoDate} deferred to ${def.toIsoDate}`,
+                ),
+            )
+        }
+        if (lines.length === 0) {
+            lines.push(
+                toChronoAscii('>> [SPATIAL:RECURRENCE] no occurrences sealed'),
+            )
+        }
+    } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        lines.push(toChronoAscii(`:: [SPATIAL:RECURRENCE_ERR] ${msg}`))
+        result = { error: msg, expandedProofs: [] }
+    }
+    const writeLine = async (line: string): Promise<void> => {
+        if (
+            lib !== undefined &&
+            lib !== null &&
+            typeof lib.hunt === 'function'
+        ) {
+            try {
+                await (lib.hunt as (a: string, b: unknown) => Promise<unknown>)(
+                    WRITE_CONSOLE,
+                    { idx: 'cns00', src: line },
+                )
+            } catch {
+                // headless fallback keeps resolving
+            }
+        }
+    }
+    for (const line of lines) {
+        await writeLine(line)
+    }
+    if (ste !== undefined && ste !== null) {
+        const hunt = (ste as unknown as { hunt?: unknown }).hunt
+        if (typeof hunt === 'function') {
+            for (const line of lines) {
+                try {
+                    await (
+                        hunt as (a: string, b: unknown) => Promise<unknown>
+                    ).call(ste, WRITE_CONSOLE, { idx: 'cns00', src: line })
+                } catch {
+                    break
+                }
+            }
+        }
+    }
+    cpy.activeMenuMode = 'RECURRENCE_CALENDAR'
+    cpy.statusMessage = 'RECURRENCE_CALENDAR_PROBE_COMPLETE'
+    cpy.lastAuditSummary = `recurrence-calendar-probe: ${lines.length} rows staged`
+    if (bal?.slv) {
+        bal.slv({
+            mnuBit: {
+                idx: 'probe-recurrence-calendar',
+                val: 1,
+                dat: result,
             },
         })
     }
