@@ -6,11 +6,11 @@
  * Zero floating-point division, zero trigonometric operations, zero epsilons.
  */
 
-import type { LatticePoint } from '../../01.lattice.unit/index.js'
+import type { LatticePoint } from '../../21.lattice.unit/index.js'
 import type {
     SegmentIntersectionResult,
     SegmentIntersectionKind,
-} from '../fce/supercover.interface.js'
+} from '../fce/segment.interface.js'
 
 /**
  * 2D Integer Cross Product of vectors (B - A) and (C - A):
@@ -150,9 +150,6 @@ export function classifySegmentEdgeIntersection(
         ((d1 > 0n && d2 < 0n) || (d1 < 0n && d2 > 0n)) &&
         ((d3 > 0n && d4 < 0n) || (d3 < 0n && d4 > 0n))
     ) {
-        // Parametric t numerator and denominator along p1 -> p2
-        //   den = (p2.x - p1.x) * (e1.y - e2.y) - (p2.y - p1.y) * (e1.x - e2.x)
-        //   num = (e1.x - p1.x) * (e1.y - e2.y) - (e1.y - p1.y) * (e1.x - e2.x)
         const denRaw =
             (p2.x - p1.x) * (e1.y - e2.y) - (p2.y - p1.y) * (e1.x - e2.x)
         const numRaw =

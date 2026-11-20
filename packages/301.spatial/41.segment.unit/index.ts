@@ -1,23 +1,38 @@
 /**
  * ============================================================================
- * :: 02.SUPERCOVER.UNIT BARREL EXPORTS
+ * :: 41.SEGMENT.UNIT BARREL EXPORTS
  * ============================================================================
  */
 
 export type {
+    default as Segment,
+    SegmentContactKind,
+    BigIntFraction,
+    TraversedHexFeature,
+    SegmentTraceResult,
     RationalParam,
     SegmentIntersectionKind,
     SegmentIntersectionResult,
     CrossedFeatureKind,
     CrossedFeature,
-    default as Supercover,
-} from './fce/supercover.interface.js'
+    Supercover,
+} from './fce/segment.interface.js'
 
 export type {
-    default as SupercoverBit,
+    default as SegmentBit,
+    SupercoverBit,
     IntersectSegmentDat,
     TraceSupercoverDat,
-} from './fce/supercover.bit.js'
+} from './fce/segment.bit.js'
+
+export {
+    crossProductBigInt,
+    clipSegmentAgainstHex,
+    traceFiniteSupercover,
+    hasLineOfSightFinite,
+    initSegment,
+    updateSegment,
+} from './buz/segment.buzz.js'
 
 export {
     crossProduct,

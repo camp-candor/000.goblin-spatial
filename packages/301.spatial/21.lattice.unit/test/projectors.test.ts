@@ -7,7 +7,7 @@ import {
     packAxialCell,
 } from '../index.js'
 
-describe('01.lattice.unit doubled affine coordinate projectors', () => {
+describe('21.lattice.unit doubled affine coordinate projectors', () => {
     describe('hexCentroid Projections', () => {
         it('projects origin (0, 0) to (0n, 0n)', () => {
             const origin = hexCentroid(0, 0)

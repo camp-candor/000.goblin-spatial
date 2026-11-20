@@ -14,7 +14,7 @@ import {
     LatticeActions,
 } from '../index.js'
 
-describe('01.lattice.unit non-euclidean axial distance & topological disks', () => {
+describe('21.lattice.unit non-euclidean axial distance & topological disks', () => {
     describe('1. axialDistance Metric Space Axioms', () => {
         it('satisfies Identity of Indiscernibles: d(a, a) === 0', () => {
             const cell = packAxialCell(12, -4)

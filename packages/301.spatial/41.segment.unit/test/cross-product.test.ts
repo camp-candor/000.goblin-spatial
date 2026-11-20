@@ -6,9 +6,9 @@ import {
     compareRationals,
     classifySegmentEdgeIntersection,
 } from '../index.js'
-import type { LatticePoint } from '../../01.lattice.unit/index.js'
+import type { LatticePoint } from '../../21.lattice.unit/index.js'
 
-describe('02.supercover.unit exact 2D integer cross-product & segment intersection predicates', () => {
+describe('41.segment.unit exact 2D integer cross-product & segment intersection predicates', () => {
     describe('1. crossProduct Orientation Properties', () => {
         it('evaluates collinear points to exactly 0n', () => {
             const a: LatticePoint = { x: 0n, y: 0n }

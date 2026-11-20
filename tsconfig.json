@@ -24,7 +24,6 @@
     "references": [
         { "path": "./packages/100.agent" },
         { "path": "./apps/worker" },
-        { "path": "./packages/001.spatial" },
         { "path": "./packages/301.spatial" }
     ]
 }

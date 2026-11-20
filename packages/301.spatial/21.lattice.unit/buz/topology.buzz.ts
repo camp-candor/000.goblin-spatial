@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * :: NON-EUCLIDEAN AXIAL DISTANCE & TOPOLOGICAL DISKS (01.lattice.unit)
+ * :: NON-EUCLIDEAN AXIAL DISTANCE & TOPOLOGICAL DISKS (21.lattice.unit)
  * ============================================================================
  * Implements exact integer hexagonal distance metrics, 6-compass neighbor
  * offsets, hollow perimeter rings, and filled topological disks.

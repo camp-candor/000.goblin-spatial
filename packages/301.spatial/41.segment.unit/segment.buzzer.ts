@@ -1,2 +1,15 @@
-export { initSegment } from './buz/segment.buzz'
-export { updateSegment } from './buz/segment.buzz'
+export {
+    initSegment,
+    updateSegment,
+    crossProductBigInt,
+    clipSegmentAgainstHex,
+    traceFiniteSupercover,
+    hasLineOfSightFinite,
+} from './buz/segment.buzz.js'
+export {
+    crossProduct,
+    isPointInBoundingBox,
+    isPointOnSegment,
+    compareRationals,
+    classifySegmentEdgeIntersection,
+} from './buz/cross-product.buzz.js'

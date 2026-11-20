@@ -9,12 +9,11 @@ import {
     sharedEdgeEndpoints,
     packAxialCell,
     unpackAxialCell,
-    createAxialCoord,
     HEX_DIRECTIONS,
 } from './index.js'
-import type { TacticalCellId, LatticePoint } from './index.js'
+import type { TacticalCellId } from './index.js'
 
-describe('01.lattice.unit affine tiling coincidence & metric space axioms', () => {
+describe('21.lattice.unit affine tiling coincidence & metric space axioms', () => {
     // Generate canonical radius-5 disk (N = 1 + 3*5*6 = 91 cells)
     const originCell = packAxialCell(0, 0)
     const diskCells = axialRange(originCell, 5)
@@ -84,7 +83,6 @@ describe('01.lattice.unit affine tiling coincidence & metric space axioms', () =
                     const offset = HEX_DIRECTIONS[dir]
                     const nQ = coordA.q + offset.q
                     const nR = coordA.r + offset.r
-                    const cellB = packAxialCell(nQ, nR)
 
                     // Opposite direction index on pointy-top hex grid: (dir + 3) % 6
                     const oppDir = (dir + 3) % 6

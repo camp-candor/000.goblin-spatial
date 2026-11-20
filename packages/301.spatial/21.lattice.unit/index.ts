@@ -43,3 +43,32 @@ export {
     packEdgeKey,
     unpackEdgeKey,
 } from './buz/packing.buzz.js'
+
+export {
+    hexCentroid,
+    hexVertices,
+    hexEdgeMidpoints,
+    sharedEdgeEndpoints,
+    getRing,
+    getSpiralDisk,
+    expectedHexCountForRadius,
+    updateLattice,
+} from './buz/lattice.buzz.js'
+
+export {
+    HEX_DIRECTIONS,
+    axialDistance,
+    axialNeighborInDirection,
+    axialNeighbors,
+    axialRing,
+    axialRange,
+    initLattice,
+    projectLattice,
+    distanceLattice,
+    diskLattice,
+} from './buz/topology.buzz.js'
+
+export * as LatticeActions from './lattice.action.js'
+export { LatticeModel } from './lattice.model.js'
+export { reducer as latticeReducer } from './lattice.reduce.js'
+export { default as LatticeUnit } from './lattice.unit.js'
